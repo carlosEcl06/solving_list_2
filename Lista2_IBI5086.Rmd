@@ -1,0 +1,706 @@
+---
+title: "IBI5086 – Lista 2 (1º Sem/2026)"
+author: "Resolução"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    number_sections: true
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    highlight: tango
+    latex_engine: xelatex
+---
+
+<!-- To render both HTML and PDF, run in R:
+rmarkdown::render("Lista2_IBI5086.Rmd", output_format = c("html_document", "pdf_document"))
+-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.width = 7, fig.height = 4)
+```
+
+---
+
+# Mapeamento de Genes: ANOVA com SNPs
+
+> Gerar X (binomial) e Y (normal); ajustar modelos de ANOVA.
+
+## Caso 1 – ANOVA 1 fator em 3 níveis (efeitos aditivo e de dominância)
+
+```{r q1_caso1_dados}
+set.seed(8732)
+n_por_genot <- 100
+
+# X: genótipos 0=aa, 1=Aa, 2=AA (distribuição ~binomial(2, p=0.3))
+# probabilidades Hardy-Weinberg com p=0.3
+p <- 0.3
+freq <- c((1-p)^2, 2*p*(1-p), p^2)   # aa, Aa, AA
+snp <- sample(0:2, n_por_genot*3, replace=TRUE, prob=freq)
+
+# Y: resposta com efeito aditivo (a=10) e dominância (d=5) sobre a média basal 100
+ # mu_aa=100, mu_Aa=115 (=100+d, com d=5 sobre midponto), mu_AA=120 (=100+2a)
+# Parametrização: a=(mu_AA-mu_aa)/2=10; d=mu_Aa-(mu_AA+mu_aa)/2=5
+mu <- c(100, 115, 120)[snp + 1]
+Y1 <- rnorm(length(snp), mean = mu, sd = 15)
+
+dat1 <- data.frame(Y = Y1, SNP = factor(snp, labels = c("aa","Aa","AA")),
+                   snp_num = snp)
+
+# Estatísticas descritivas por genótipo
+library(psych)
+descr1 <- describeBy(dat1, group = "SNP", mat = TRUE)
+
+tabela1 <- descr1[c("Y1", "Y2", "Y3"), c("group1","n","mean","sd","median","min","max")]
+tabela1$group1 <- c("aa", "Aa", "AA")
+rownames(tabela1) <- NULL
+
+knitr::kable(tabela1, digits = 2,
+             col.names = c("genotype","n","mean","sd","median","min","max"),
+             caption = "Estatísticas descritivas de Y por genótipo (Caso 1)")
+```
+
+```{r q1_caso1_graf}
+boxplot(Y ~ SNP, data = dat1, col = c("lightblue","lightgreen","lightyellow"),
+        main = "Distribuição de Y por Genótipo (Caso 1)", xlab = "Genótipo", ylab = "Y")
+
+# Perfil de médias
+medias1 <- tapply(dat1$Y, dat1$SNP, mean)
+plot(0:2, medias1, type = "b", pch = 19, col = "red",
+     xaxt = "n", xlab = "Genótipo", ylab = "Média de Y",
+     main = "Perfil de Médias – Caso 1")
+axis(1, at = 0:2, labels = c("aa","Aa","AA"))
+```
+
+### Codificação dos efeitos aditivo (xa) e de dominância (xd)
+
+```{r q1_caso1_codificacao}
+# xa: -1 (aa), 0 (Aa), 1 (AA)  → captura efeito aditivo
+# xd:  0 (aa), 1 (Aa), 0 (AA)  → captura desvio de dominância
+dat1$xa <- dat1$snp_num - 1
+dat1$xd <- ifelse(dat1$snp_num == 1, 1, 0)
+```
+
+### Modelo com 2 g.l. – fatores aditivo e de dominância
+
+```{r q1_caso1_modelo}
+fit1_ad <- lm(Y ~ xa + xd, data = dat1)
+summary(fit1_ad)
+anova(fit1_ad)
+```
+
+> **Discussão: Interpretação dos coeficientes**
+>
+> O intercepto estimado ($\hat{\mu} = 110,46$) representa o ponto médio entre as médias
+> dos homozigotos, $(\mu_{AA} + \mu_{aa})/2$.
+>
+> O efeito aditivo (`xa`, $\hat{a} = 9,99$) é altamente significativo ($p < 0,001$), indicando
+> que cada alelo A adicional eleva Y em aproximadamente 10 unidades.
+>
+> O efeito de dominância (`xd`, $\hat{d} = 3,26$) não é significativo ($p = 0,109$), indicando
+> que **não** há evidência de que o heterozigoto Aa se desvia do ponto médio dos homozigotos.
+>
+> O modelo explica cerca de 20% da variância total de Y (R² = 0,203).
+
+### Diagnóstico dos resíduos (Caso 1)
+
+```{r q1_caso1_diag, fig.height=5}
+par(mfrow = c(2,2))
+plot(fit1_ad)
+par(mfrow = c(1,1))
+
+shapiro.test(fit1_ad$residuals)
+bartlett.test(Y ~ SNP, data = dat1)
+```
+
+> **Discussão dos gráficos de diagnóstico**
+>
+> Residuals vs Fitted: dispersão vertical nas três colunas parece similar, e a linha vermelha
+> está praticamente horizontal. Aleatoriedade OK.
+>
+> Q-Q Residuals: pontos muito bem aderidos à diagonal. Normalidade bem satisfeita.
+>
+> Sale-Location: Dispersão bem uniforme, linha vermelha praticamente horizontal, homocedasticidade bem satisfeita.
+> As três observações rotuladas são outliers, nada alarmante.
+>
+> Residuals vs Leverage: As observações do genótipo AA concentram-se à direita (~0,033), com maior leverage
+> que os demais genótipos — esperado dado sua menor frequência amostral sob
+> Hardy-Weinberg (p=0,3, ~9% de AA). Ainda assim, a linha de Cook aparece colapsada
+> na borda esquerda do gráfico, indicando que nenhuma observação exerce influência
+> desproporcional sobre os coeficientes. O modelo é estável.
+>
+> **Testes de diagnóstico:**
+> O teste de Shapiro-Wilk **não rejeita** a normalidade dos resíduos (W = 0,998; p = 0,947),
+> e o teste de Bartlett **não rejeita** a homogeneidade de variâncias entre os três genótipos
+> (K² = 0,42; gl = 2; p = 0,810). Ambos os resultados confirmam que as suposições do
+> modelo linear são satisfeitas, em concordância com o diagnóstico visual dos gráficos.
+
+### Comparações múltiplas de Tukey
+
+```{r q1_caso1_tukey}
+fit1_aov <- aov(Y ~ SNP, data = dat1)
+TukeyHSD(fit1_aov)
+par(mar=c(5,8,4,2))
+plot(TukeyHSD(fit1_aov))
+```
+
+> **Comparações múltiplas de Tukey:**
+> O teste de Tukey HSD compara os três genótipos par a par com controle da taxa de erro
+> familial a 5%. Aa−aa (diff = 13,25; p < 0,001) e AA−aa (diff = 19,98; p < 0,001) são
+> ambos significativos, confirmando que cada alelo A adicional eleva a média de Y —
+> resultado coerente com o efeito aditivo significativo estimado no modelo anterior
+> ($\hat{a} \approx 10$). O contraste AA−Aa (diff = 6,73; p = 0,076), no entanto, não
+> atinge significância, com IC 95% que inclui o zero (−0,54; 13,99), como também é
+> visível no gráfico.
+>
+> Esse resultado é consistente com a não-significância do efeito de dominância.
+
+---
+
+## Caso 2 – ANOVA Fatorial 3×3 (dois SNPs, efeitos aditivo, dominância e epistasia)
+
+```{r q1_caso2_dados}
+set.seed(8732)
+n_cell <- 50   # por célula (genótipo conjunto)
+
+# SNP1 e SNP2 gerados independentemente (HWE, p1=0.3, p2=0.4)
+p1 <- 0.3; p2 <- 0.4
+freq1 <- c((1-p1)^2, 2*p1*(1-p1), p1^2)
+freq2 <- c((1-p2)^2, 2*p2*(1-p2), p2^2)
+
+snp1 <- sample(0:2, n_cell*9, replace=TRUE, prob=freq1)
+snp2 <- sample(0:2, n_cell*9, replace=TRUE, prob=freq2)
+
+# Estrutura de médias com epistasia (interação a1*a2)
+# mu_base + a1_efeito + a2_efeito + interacao
+a1 <- 8; d1 <- 4; a2 <- 6; d2 <- 3
+
+xa1 <- snp1 - 1        # -1, 0, 1
+xd1 <- ifelse(snp1==1, 1, 0) # 0, 1, 0
+xa2 <- snp2 - 1
+xd2 <- ifelse(snp2==1, 1, 0)
+
+# Modelo com efeitos e interações
+mu2 <- 100 + a1*xa1 + d1*xd1 + a2*xa2 + d2*xd2 +
+       3*xa1*xa2 + 1.5*xa1*xd2 + 1.5*xd1*xa2 + 1*xd1*xd2
+
+Y2 <- rnorm(length(mu2), mean = mu2, sd = 12)
+
+dat2 <- data.frame(
+  Y = Y2,
+  SNP1 = factor(snp1, labels = c("a1a1","a1A1","A1A1")),
+  SNP2 = factor(snp2, labels = c("a2a2","a2A2","A2A2")),
+  xa1 = xa1, xd1 = xd1, xa2 = xa2, xd2 = xd2
+)
+
+# Estatísticas descritivas
+cat("Dimensões do dataset (Caso 2):", nrow(dat2), "observações\n")
+tapply(dat2$Y, list(dat2$SNP1, dat2$SNP2), mean) |>
+  round(2) |>
+  knitr::kable(caption = "Médias de Y por combinação genotípica (Caso 2)")
+```
+
+```{r q1_caso2_perfil}
+with(dat2,
+     interaction.plot(SNP2, SNP1, Y, col = 1:3,
+                      main = "Perfil de Médias – Caso 2 (Epistasia)",
+                      xlab = "Genótipo SNP2", ylab = "Média Y",
+                      lwd = 2, pch = 19, type = "b"))
+```
+
+> O perfil de médias evidencia epistasia entre SNP1 e SNP2: o efeito de cada SNP sobre Y
+> depende do genótipo do outro. Quanto mais alelos A1 o indivíduo carrega, maior o ganho
+> em Y proporcionado pelos alelos A2 — padrão consistente com a epistasia aditiva $\times$ aditiva
+> ($a_1 \times a_2 = 3$) simulada no modelo verdadeiro.
+
+### Modelo com efeitos aditivos, dominância e interações (8 g.l.)
+
+```{r q1_caso2_modelo}
+# Parametrização explícita: xa1, xd1, xa2, xd2 e 4 termos de interação
+fit2_completo <- lm(Y ~ xa1 + xd1 + xa2 + xd2 +
+                        xa1:xa2 + xa1:xd2 + xd1:xa2 + xd1:xd2,
+                    data = dat2)
+summary(fit2_completo)
+anova(fit2_completo)
+```
+
+> **Interpretação:**  
+> - `xa1` e `xa2`: efeitos aditivos dos SNP1 e SNP2, respectivamente.  
+> - `xd1` e `xd2`: desvios de dominância de cada SNP.  
+> - `xa1:xa2` ($a_1 \times a_2$): **epistasia aditiva $\times$ aditiva** – interação entre os efeitos aditivos.  
+> - `xa1:xd2` ($a_1 \times d_2$), `xd1:xa2` ($d_1 \times a_2$): epistasias mistas.  
+> - `xd1:xd2` ($d_1 \times d_2$): epistasia dominância $\times$ dominância.
+>
+> O modelo explica 27,9% da variância de Y (R² = 0,279) e é globalmente significativo
+> (F = 21,36; p < 0,001). O erro padrão residual (~12,67) está próximo do valor
+> verdadeiro simulado ($\sigma = 12$), indicando bom ajuste.
+>
+> **Efeitos principais:** os efeitos aditivos de ambos os SNPs são significativos —
+> `xa1` ($\hat{a}_1 = 6,86$; p < 0,001) e `xa2` ($\hat{a}_2 = 5,91$; p < 0,001) —
+> indicando que cada alelo A adicional em cada loco eleva Y independentemente,
+> próximo aos valores verdadeiros simulados ($a_1 = 8$, $a_2 = 6$). Os efeitos de
+> dominância `xd1` e `xd2` não são significativos pelo summary (p = 0,203 e p = 0,309),
+> porém na tabela ANOVA sequencial ambos aparecem significativos (p < 0,001 e p < 0,001)
+> — discrepância explicada pela ordem de entrada dos termos na ANOVA Tipo I e pela
+> correlação entre os preditores (ANOVA: `xd1` p = 2,8$\times10^{-6}$; `xd2` p < 0,001).
+>
+> **Epistasia:** apenas a interação aditiva$\times$aditiva `xa1:xa2` é significativa na tabela
+> ANOVA (F = 6,37; p = 0,012), coerente com o maior coeficiente de epistasia simulado
+> ($a_1 \times a_2 = 3$). As demais interações — `xa1:xd2`, `xd1:xa2` e `xd1:xd2` —
+> não atingem significância, embora seus valores verdadeiros simulados fossem pequenos
+> (1,5; 1,5 e 1,0), o que explica a dificuldade de detecção com este tamanho amostral.
+>
+> Em conjunto, os resultados confirmam que o fenótipo Y é influenciado pelos efeitos
+> aditivos de dois locos e por sua interação epistática aditiva$\times$aditiva, padrão
+> visualmente antecipado pelo não-paralelismo das linhas no perfil de médias.
+
+```{r q1_caso2_diag, fig.height=5}
+par(mfrow = c(2,2)); plot(fit2_completo); par(mfrow = c(1,1))
+shapiro.test(fit2_completo$residuals)
+```
+
+> **Diagnóstico dos resíduos – Caso 2:**
+>
+> **Residuals vs Fitted:** os pontos distribuem-se em colunas verticais correspondentes
+> às 9 combinações genotípicas (células do fatorial 3×3), padrão esperado com preditores
+> discretos. A linha vermelha é aproximadamente horizontal em 0, sem curvatura
+> sistemática, indicando que o modelo linear é adequado.
+>
+> **Q-Q Residuals:** excelente aderência à diagonal em toda a extensão central, com
+> desvios pequenos nas caudas (observações 406, 285, 75). A normalidade dos resíduos
+> é confirmada formalmente pelo teste de Shapiro-Wilk (W = 0,996; p = 0,259),
+> que não rejeita H₀.
+>
+> **Scale-Location:** a linha vermelha apresenta leve curvatura — sobe levemente no
+> centro e cai nas extremidades — sugerindo uma discreta heterocedasticidade entre
+> as células genotípicas. Não é grave, mas vale notar que células com genótipos menos
+> frequentes (como A1A1\_A2A2, de baixa probabilidade sob HWE) podem ter variâncias
+> amostrais menos estáveis.
+>
+> **Residuals vs Leverage:** os pontos se distribuem em faixas de leverage distintas,
+> refletindo as diferentes frequências das 9 células genotípicas — células raras
+> (como A1A1 com p1=0,3) têm maior leverage, chegando a ~0,20 (ponto 16). Ainda
+> assim, a linha de Cook permanece colapsada na borda inferior do gráfico, indicando
+> que nenhuma observação exerce influência desproporcional sobre os coeficientes.
+
+---
+
+# Delineamento Fatorial 3 $\times$ 2: SNP $\times$ Subgrupo Populacional
+
+## Simulação dos dados (P1, P2, P3)
+
+```{r q2_simula}
+set.seed(8732)
+n_rep <- 30   # réplicas por célula
+sigma  <- 10  # desvio padrão dentro de célula (mmHg)
+
+# Médias de pressão arterial sistólica (mmHg) por genótipo e sexo
+# Subgrupo A = feminino, B = masculino (homens ~10 mmHg mais altos)
+medias_pop <- list(
+  P1 = matrix(c(118,118,118, 128,128,128), nrow=2, byrow=TRUE,
+              dimnames=list(c("A","B"), c("aa","Aa","AA"))),
+  P2 = matrix(c(113,118,128, 120,128,138), nrow=2, byrow=TRUE,
+              dimnames=list(c("A","B"), c("aa","Aa","AA"))),
+  P3 = matrix(c(113,118,123, 113,123,138), nrow=2, byrow=TRUE,
+              dimnames=list(c("A","B"), c("aa","Aa","AA")))
+)
+
+# Gerar dados para cada população
+gerar_pop <- function(mmat, n, sigma, pop_nome) {
+  rows <- list()
+  for (grp in rownames(mmat)) {
+    for (geno in colnames(mmat)) {
+      y <- rnorm(n, mean = mmat[grp, geno], sd = sigma)
+      rows[[length(rows)+1]] <- data.frame(
+        Y = y, Grupo = grp, Genotipo = geno,
+        Geno_num = match(geno, c("aa","Aa","AA")) - 1,
+        Pop = pop_nome
+      )
+    }
+  }
+  do.call(rbind, rows)
+}
+
+dat_P1 <- gerar_pop(medias_pop$P1, n_rep, sigma, "P1")
+dat_P2 <- gerar_pop(medias_pop$P2, n_rep, sigma, "P2")
+dat_P3 <- gerar_pop(medias_pop$P3, n_rep, sigma, "P3")
+
+# Ordenar fatores
+for (d in list(dat_P1, dat_P2, dat_P3)) {
+  d$Genotipo <- factor(d$Genotipo, levels = c("aa","Aa","AA"))
+}
+dat_P1$Genotipo <- factor(dat_P1$Genotipo, levels=c("aa","Aa","AA"))
+dat_P2$Genotipo <- factor(dat_P2$Genotipo, levels=c("aa","Aa","AA"))
+dat_P3$Genotipo <- factor(dat_P3$Genotipo, levels=c("aa","Aa","AA"))
+```
+
+> **Contextualização (item b):**
+> Os dados simulam medições de pressão arterial sistólica (mmHg) em indivíduos de
+> três populações (P1, P2, P3), classificados segundo o genótipo de um SNP (aa, Aa, AA)
+> e o sexo (A = feminino, B = masculino). Adotou-se $n = 30$ réplicas por célula e
+> $\sigma = 10$ mmHg. As três populações representam cenários distintos: **P1** sem
+> efeito do SNP (apenas efeito de sexo, com homens ~10 mmHg acima das mulheres);
+> **P2** com efeito aditivo do SNP e perfis paralelos entre sexos; e **P3** com
+> interação SNP×sexo, onde o efeito do SNP é modesto em mulheres (+10 mmHg de aa→AA)
+> mas acentuado em homens (+25 mmHg).
+
+---
+
+## Análise por População
+
+### Função auxiliar para análise completa
+
+```{r q2_func}
+analisa_pop <- function(dat, nome_pop) {
+  cat("\n\n========================================\n")
+  cat(" POPULAÇÃO:", nome_pop, "\n")
+  cat("========================================\n\n")
+
+  # (i) Estatísticas descritivas
+  cat("--- (i) Estatísticas Descritivas ---\n")
+  desc <- describeBy(dat$Y, group = list(dat$Grupo, dat$Genotipo), mat=TRUE)
+  print(knitr::kable(desc[, c("group1","group2","n","mean","sd","median")],
+                     digits=2, caption=paste("Descritivas –", nome_pop)))
+
+  # (ii) Perfil de médias
+  par(mfrow=c(1,2))
+  with(dat,
+       interaction.plot(Genotipo, Grupo, Y,
+                        col=c("red","blue"), lwd=2, pch=19, type="b",
+                        main=paste("Perfil de Médias –", nome_pop),
+                        xlab="Genótipo SNP", ylab="Média Y"))
+
+  # Boxplot
+  boxplot(Y ~ Grupo:Genotipo, data=dat, col=c("lightcoral","lightblue"),
+          main=paste("Boxplot –", nome_pop),
+          xlab="Grupo:Genótipo", ylab="Y", las=2, cex.axis=0.7)
+  par(mfrow=c(1,1))
+
+  # (iii) ANOVA Fatorial 3×2 – fator categórico
+  cat("\n--- (iii) ANOVA Fatorial 3x2 (Genotipo categórico) ---\n")
+  fit_cat <- aov(Y ~ Grupo * Genotipo, data=dat)
+  print(summary(fit_cat))
+  cat("\nCoeficientes:\n")
+  print(coef(fit_cat))
+
+  # Diagnóstico resíduos
+  par(mfrow=c(2,2)); plot(fit_cat); par(mfrow=c(1,1))
+  cat("\nShapiro-Wilk (normalidade resíduos):\n")
+  print(shapiro.test(fit_cat$residuals))
+  cat("Bartlett (homocedasticidade):\n")
+  print(bartlett.test(Y ~ interaction(Grupo, Genotipo), data=dat))
+
+  # Tukey
+  cat("\nComparações múltiplas de Tukey:\n")
+  tk <- TukeyHSD(fit_cat)
+  print(tk)
+  plot(tk, las=1, cex.axis=0.6)
+
+  # (iv) SNP como variável quantitativa (1 g.l. – efeito linear)
+  cat("\n--- (iv) SNP como variável quantitativa (efeito aditivo linear) ---\n")
+  fit_num <- lm(Y ~ Grupo * Geno_num, data=dat)
+  print(summary(fit_num))
+  print(anova(fit_num))
+
+  invisible(list(fit_cat=fit_cat, fit_num=fit_num))
+}
+```
+
+### P1 – Sem efeito de SNP, sem interação
+
+```{r q2_P1, fig.height=5}
+res_P1 <- analisa_pop(dat_P1, "P1")
+```
+
+> **Interpretação P1:**
+>
+> **Perfil de médias e boxplot:** as linhas do perfil de médias oscilam levemente
+> entre genótipos — a linha masculina sobe de aa para Aa e recua em AA, enquanto
+> a feminina desce ligeiramente — mas essas variações refletem apenas flutuação
+> amostral em torno das médias verdadeiras (118 mmHg em A, 128 mmHg em B para
+> todos os genótipos). A separação vertical entre os sexos é consistente e
+> visualmente dominante. O boxplot corrobora: as distribuições dentro de cada
+> sexo são similares entre genótipos, com dispersão compatível com $\sigma = 10$ mmHg.
+>
+> **ANOVA:** apenas o efeito de Grupo é significativo (F = 64,05; p < 0,001),
+> estimando uma diferença de ~10,7 mmHg entre homens e mulheres. Os efeitos de
+> Genótipo (F = 0,27; p = 0,761) e da interação Grupo×Genótipo (F = 0,28; p = 0,755)
+> são não significativos, como esperado pela estrutura simulada.
+>
+> **Diagnóstico:** normalidade (Shapiro-Wilk: W = 0,994; p = 0,744) e
+> homocedasticidade (Bartlett: K² = 10,56; p = 0,061) satisfeitas. O gráfico
+> "Constant Leverage: Residuals vs Factor Levels" — que substitui o Residuals vs
+> Leverage em modelos `aov` com delineamento balanceado — mostra resíduos uniformemente
+> distribuídos entre os níveis de Grupo, sem padrões preocupantes.
+>
+> **Tukey:** o contraste B−A é significativo (~11,5 mmHg; p < 0,001). Todos os
+> contrastes entre genótipos (Aa−aa, AA−aa, AA−Aa) incluem o zero nos ICs e têm
+> p > 0,75, confirmando ausência de efeito do SNP. No Tukey da interação
+> Grupo:Genótipo, os únicos contrastes significativos são aqueles que comparam
+> grupos de sexos opostos (ex.: B:aa−A:aa, B:Aa−A:Aa), ou seja, toda a significância
+> se deve ao efeito de sexo, não ao SNP.
+>
+> **SNP quantitativo (item iv):** o modelo com `Geno_num` confirma: coeficiente do
+> SNP não significativo (−0,61; p = 0,625) e interação Grupo×Geno_num também não
+> significativa (p = 0,985). O ajuste é equivalente ao modelo categórico, com R² = 0,270
+> explicado quase integralmente pelo efeito de sexo.
+
+### P2 – Efeito aditivo de SNP, sem interação (perfis paralelos)
+
+```{r q2_P2, fig.height=5}
+res_P2 <- analisa_pop(dat_P2, "P2")
+```
+
+> **Interpretação P2:** As médias crescem com o número de alelos A em ambos os subgrupos, com perfis aproximadamente paralelos. Espera-se **efeito de Genotipo significativo** (efeito aditivo do SNP) e **efeito de Grupo**, mas **sem interação significativa** (perfis paralelos indicam ausência de interação).
+
+### P3 – Efeito de SNP com interação (epistasia SNP × Subgrupo)
+
+```{r q2_P3, fig.height=5}
+res_P3 <- analisa_pop(dat_P3, "P3")
+```
+
+> **Interpretação P3:** No subgrupo A, o efeito do SNP é pequeno (75→80→85); no subgrupo B, o efeito é maior (75→85→100). As diferenças entre AA e aa são distintas nos subgrupos (A: +10; B: +25), indicando **interação Genotipo×Grupo**. O perfil de médias deve mostrar linhas não paralelas.
+
+---
+
+## Item (d) – Combinando as três populações
+
+### (d.i) – Fatorial 3×2×3: SNP × Grupo × Populaçao (todos fixos)
+
+```{r q2_d1}
+dat_all <- rbind(dat_P1, dat_P2, dat_P3)
+dat_all$Pop <- factor(dat_all$Pop)
+
+# Modelo completo 3x2x3
+fit_fixo <- aov(Y ~ Grupo * Genotipo * Pop, data = dat_all)
+summary(fit_fixo)
+
+with(dat_all,
+     interaction.plot(Genotipo, interaction(Grupo,Pop), Y,
+                      main="Perfil Médias: SNP × Grupo × Populaçao",
+                      xlab="Genótipo", ylab="Média Y",
+                      lwd=2, type="b"))
+```
+
+> **Modelo (d.i):** `Y ~ Grupo * Genotipo * Pop` com todos os efeitos principais (3 fatores) e todas as interações de 2ª e 3ª ordem. A interação tripla `Genotipo:Grupo:Pop` permite verificar se a interação SNP×Subgrupo difere entre populações. Tem 2+1+2+2+2+4+4 = **17 g.l. de tratamento** e é útil para testar heterogeneidade de efeito entre populações (relevante em estudos de metanálise genômica).
+
+### (d.ii) – Fatorial 3×2 com Populaçao como fator aleatório (ANOVA Mista)
+
+```{r q2_d2}
+library(lme4)
+
+# Modelo misto: Population como efeito aleatório (intercepto aleatório por Pop)
+fit_misto <- lmer(Y ~ Grupo * Genotipo + (1 | Pop), data = dat_all, REML = TRUE)
+summary(fit_misto)
+
+# Teste dos efeitos fixos
+library(lmerTest)
+fit_misto2 <- lmer(Y ~ Grupo * Genotipo + (1 | Pop), data = dat_all, REML = FALSE)
+anova(fit_misto2)
+```
+
+> **Modelo (d.ii):** `Y ~ Grupo * Genotipo + (1|Pop)`. Populaçao é um **efeito aleatório** (ex.: amostras de populações tiradas ao acaso de um universo maior de populações). O intercepto aleatório por Pop captura variabilidade entre populações, e os efeitos fixos de Grupo e Genotipo são estimados controlando essa fonte de variação. As inferências se generalizam a outras populações (não apenas às 3 observadas).
+
+---
+
+# Regressão Logística: Y dicotomizada
+
+## Dicotomização de Y
+
+```{r q3_dicot}
+# Ponto de corte: mediana global de cada dataset
+corte1 <- median(dat1$Y)
+corte2 <- median(dat2$Y)
+corte_all <- median(dat_all$Y)
+
+dat1$Ybin <- as.factor(ifelse(dat1$Y > corte1, 1, 0))
+dat2$Ybin <- as.factor(ifelse(dat2$Y > corte2, 1, 0))
+dat_all$Ybin <- as.factor(ifelse(dat_all$Y > corte_all, 1, 0))
+
+cat("Ponto de corte Q1:", corte1, " | Distribuição:\n"); print(table(dat1$Ybin))
+cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
+```
+
+---
+
+## Questão 1 (Caso 1) – Regressão Logística
+
+```{r q3_logit1}
+# Modelo logístico com efeitos aditivo e de dominância
+fitrl1_ad <- glm(Ybin ~ xa + xd, family=binomial(link="logit"), data=dat1)
+summary(fitrl1_ad)
+cat("\nOR estimados (exp(coef)):\n")
+print(exp(coef(fitrl1_ad)))
+cat("\nIC para OR:\n")
+print(exp(confint(fitrl1_ad)))
+```
+
+```{r q3_logit1_roc}
+# Probabilidades preditas e tabela de classificação
+pred1r <- predict(fitrl1_ad, type="response")
+class1r <- ifelse(pred1r >= 0.5, 1, 0)
+cat("Tabela de classificação:\n")
+print(table(Predito=class1r, Observado=dat1$Ybin))
+cat("Acurácia:", round(mean(class1r == dat1$Ybin), 3), "\n")
+
+plot(0:2, tapply(as.numeric(dat1$Ybin)-1, dat1$snp_num, mean),
+     type="b", pch=19, col="blue", xaxt="n",
+     xlab="Genótipo", ylab="P(Y=1 | Genótipo)",
+     main="Prob. estimadas vs. observadas – Regressão Logística (Q1-C1)")
+axis(1, at=0:2, labels=c("aa","Aa","AA"))
+lines(0:2, tapply(pred1r, dat1$snp_num, mean), col="red", lty=2, pch=15, type="b")
+legend("topleft", c("Observado","Predito"), col=c("blue","red"), lty=c(1,2), bty="n")
+```
+
+> **Comparação ANOVA × Logística (Caso 1):**  
+> O efeito aditivo (`xa`) permanece altamente significativo em ambos os modelos. O coeficiente logístico representa a **log-razão de chances** de Y=1 por unidade de aumento em xa. O OR associado ao efeito aditivo indica a chance relativa de fenótipo elevado a cada alelo A adicional.
+
+---
+
+## Questão 1 (Caso 2) – Regressão Logística com dois SNPs
+
+```{r q3_logit2}
+fitrl2 <- glm(Ybin ~ xa1 + xd1 + xa2 + xd2 +
+                     xa1:xa2 + xa1:xd2 + xd1:xa2 + xd1:xd2,
+              family=binomial(link="logit"), data=dat2)
+summary(fitrl2)
+cat("\nOR estimados:\n")
+print(round(exp(coef(fitrl2)), 3))
+cat("\nIC para OR:\n")
+print(round(exp(confint(fitrl2)), 3))
+```
+
+```{r q3_logit2_class}
+pred2r <- predict(fitrl2, type="response")
+class2r <- ifelse(pred2r >= 0.5, 1, 0)
+cat("Tabela de classificação:\n")
+print(table(Predito=class2r, Observado=dat2$Ybin))
+cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
+```
+
+---
+
+## Questão 2 – Regressão Logística por População
+
+```{r q3_logit_pop, fig.height=4}
+logistica_pop <- function(dat, nome) {
+  cat("\n\n==============================\n")
+  cat(" POPULAÇÃO:", nome, "\n==============================\n")
+  
+  # Codificação aditiva/dominância para SNP
+  dat$xa_snp <- dat$Geno_num - 1
+  dat$xd_snp <- ifelse(dat$Geno_num==1, 1, 0)
+  dat$Grupo_bin <- ifelse(dat$Grupo=="A", 0, 1)
+  
+  # Dicotomizar Y
+  corte_local <- median(dat$Y)
+  dat$Ybin <- as.factor(ifelse(dat$Y > corte_local, 1, 0))
+
+  fit_logit <- glm(Ybin ~ Grupo_bin * (xa_snp + xd_snp),
+                   family=binomial(link="logit"), data=dat)
+  cat("\nModelo logístico – fator categórico:\n")
+  print(summary(fit_logit))
+  cat("\nOR estimados:\n")
+  print(round(exp(coef(fit_logit)), 3))
+
+  # Prob preditas
+  pred_r <- predict(fit_logit, type="response")
+  class_r <- ifelse(pred_r >= 0.5, 1, 0)
+  cat("\nAcurácia:", round(mean(class_r == dat$Ybin), 3), "\n")
+
+  # Comparação com ANOVA para o mesmo dado
+  cat("\n[ANOVA correspondente – para comparação]\n")
+  fit_anova <- lm(Y ~ Grupo * Genotipo, data=dat)
+  cat("ANOVA p-valor Genotipo:", anova(fit_anova)["Genotipo","Pr(>F)"], "\n")
+  cat("Logístico p-valor xa:  ", summary(fit_logit)$coef["xa_snp","Pr(>|z|)"], "\n")
+
+  invisible(fit_logit)
+}
+
+logistica_pop(dat_P1, "P1")
+logistica_pop(dat_P2, "P2")
+logistica_pop(dat_P3, "P3")
+```
+
+---
+
+## Regressão Logística Combinada (3 populações)
+
+```{r q3_logit_all}
+dat_all$xa_snp   <- dat_all$Geno_num - 1
+dat_all$xd_snp   <- ifelse(dat_all$Geno_num==1, 1, 0)
+dat_all$Grupo_bin <- ifelse(dat_all$Grupo=="A", 0, 1)
+
+# Efeito fixo de Pop
+fitrl_all_fixo <- glm(Ybin ~ Grupo_bin * (xa_snp + xd_snp) + Pop,
+                      family=binomial(link="logit"), data=dat_all)
+summary(fitrl_all_fixo)
+cat("\nOR estimados:\n")
+print(round(exp(coef(fitrl_all_fixo)), 3))
+
+# Modelo misto logístico (Pop aleatório)
+library(lme4)
+fitrl_all_misto <- glmer(Ybin ~ Grupo_bin * (xa_snp + xd_snp) + (1|Pop),
+                         family=binomial(link="logit"), data=dat_all)
+summary(fitrl_all_misto)
+```
+
+---
+
+## Comparação ANOVA vs. Regressão Logística
+
+```{r q3_comparacao}
+# ANOVA Q1C1
+pval_anova_q1 <- anova(lm(Y ~ xa + xd, data=dat1))["xa","Pr(>F)"]
+pval_logit_q1 <- summary(fitrl1_ad)$coef["xa","Pr(>|z|)"]
+pval_anova_P2 <- anova(res_P2$fit_cat)["Genotipo","Pr(>F)"]
+pval_anova_P3 <- anova(res_P3$fit_cat)["Grupo:Genotipo","Pr(>F)"]
+
+# Logístico P2
+d2tmp <- dat_P2
+d2tmp$xa <- d2tmp$Geno_num - 1
+d2tmp$xd <- ifelse(d2tmp$Geno_num==1, 1, 0)
+d2tmp$Gb <- ifelse(d2tmp$Grupo=="A", 0, 1)
+d2tmp$Ybin2 <- as.factor(ifelse(d2tmp$Y > median(d2tmp$Y), 1, 0))
+pval_logit_P2 <- tryCatch(
+  summary(glm(Ybin2 ~ Gb*(xa+xd), family=binomial, data=d2tmp))$coef["xa","Pr(>|z|)"],
+  error = function(e) NA)
+
+# Logístico P3
+d3tmp <- dat_P3
+d3tmp$xa <- d3tmp$Geno_num - 1
+d3tmp$xd <- ifelse(d3tmp$Geno_num==1, 1, 0)
+d3tmp$Gb <- ifelse(d3tmp$Grupo=="A", 0, 1)
+d3tmp$Ybin3 <- as.factor(ifelse(d3tmp$Y > median(d3tmp$Y), 1, 0))
+fit_logit_p3 <- tryCatch(
+  glm(Ybin3 ~ Gb*(xa+xd), family=binomial, data=d3tmp),
+  error = function(e) NULL)
+pval_logit_P3 <- if(!is.null(fit_logit_p3)) {
+  cf <- summary(fit_logit_p3)$coef
+  if ("Gb:xa" %in% rownames(cf)) cf["Gb:xa","Pr(>|z|)"] else NA
+} else NA
+
+comp <- data.frame(
+  Modelo  = c("ANOVA xa (Q1-C1)","Logístico xa (Q1-C1)",
+              "ANOVA SNP (P2)","Logístico xa (P2)",
+              "ANOVA SNP×Grupo (P3)","Logístico xa×Grupo (P3)"),
+  P_valor = round(c(pval_anova_q1, pval_logit_q1,
+                    pval_anova_P2, pval_logit_P2,
+                    pval_anova_P3, pval_logit_P3), 4)
+)
+knitr::kable(comp, caption="Comparação de p-valores: ANOVA vs. Regressão Logística")
+```
+
+> **Impacto da categorização:**  
+> A dicotomização da variável resposta **reduz o poder estatístico** do teste, pois descarta informação contínua de Y. Em geral, os p-valores tendem a ser maiores na regressão logística (menos poder) em comparação à ANOVA sobre Y contínua. Contudo, quando o fenótipo de interesse é genuinamente binário (ex.: doença/ausência), a regressão logística é o modelo **correto**, e os **Odds Ratios** têm interpretação clínica direta. O efeito aditivo do SNP (coef. xa) é detectado em ambos os modelos quando suficientemente forte, mas a magnitude da perda de poder depende do ponto de corte adotado e da distribuição subjacente de Y.
+
+---
+
+*Documento gerado com R Markdown – IBI5086/2026*
