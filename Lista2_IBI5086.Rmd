@@ -304,12 +304,12 @@ shapiro.test(fit2_completo$residuals)
 
 # Delineamento Fatorial 3 $\times$ 2: SNP $\times$ Subgrupo Populacional
 
-## Simulação dos dados (P1, P2, P3)
+## Simulação dos dados (P1, P2, P3) (item a)
 
 ```{r q2_simula}
 set.seed(8732)
-n_rep <- 30   # réplicas por célula
-sigma  <- 8   # desvio padrão dentro de célula
+n_rep <- 30   # réplicas
+sigma  <- 8   # desvio padrão
 
 # Médias fornecidas na lista
 medias_pop <- list(
@@ -351,9 +351,9 @@ dat_P3$Genotipo <- factor(dat_P3$Genotipo, levels=c("aa","Aa","AA"))
 > Os dados representam medições de pressão arterial diastólica em repouso (mmHg) em
 > indivíduos de três populações distintas (P1, P2, P3), classificados segundo o
 > genótipo de um SNP (aa, Aa, AA) e a origem geográfica (A e B). Adotou-se $n = 30$
-> réplicas por célula e $\sigma = 8$ mmHg. As três populações representam cenários
-> distintos: **P1** sem efeito do SNP (apenas diferença entre subgrupos: B
-> $\approx$ 10 mmHg acima de A); **P2** com efeito aditivo do SNP e perfis paralelos
+> réplicas por co-ordenada (Grupo $\times$ Genótipo) $\sigma = 8$ mmHg. As três populações
+> representam cenários distintos: **P1** sem efeito do SNP (apenas diferença entre subgrupos: B
+> $\approx$ 10 mmHg acima de A); **P2** com efeito do SNP e perfis paralelos
 > entre subgrupos; e **P3** com interação SNP$\times$subgrupo, onde o efeito do SNP é
 > modesto em A (+10 mmHg de aa→AA) mas acentuado em B (+25 mmHg), sugerindo que
 > fatores populacionais do subgrupo B potencializam o efeito do SNP sobre a pressão
@@ -441,10 +441,9 @@ res_P1 <- analisa_pop(dat_P1, "P1")
 > dominante. O boxplot corrobora: as distribuições dentro de cada subgrupo são
 > similares entre genótipos, com dispersão compatível com $\sigma = 8$ mmHg.
 >
-> **ANOVA:** apenas o efeito de Grupo é significativo (F = 94,96; p < 0,001),
-> estimando uma diferença de ~10,6 mmHg entre os subgrupos A e B. Os efeitos de
+> **ANOVA:** apenas o efeito de Grupo é significativo (F = 94,96; p < 0,001). Os efeitos de
 > Genótipo (F = 0,27; p = 0,761) e da interação Grupo$\times$Genótipo (F = 0,28; p = 0,755)
-> são não significativos, como esperado pela estrutura simulada.
+> não são significativos, como esperado pela estrutura simulada.
 >
 > **Diagnóstico:** normalidade (Shapiro-Wilk: W = 0,994; p = 0,744) e
 > homocedasticidade (Bartlett: K² = 10,56; p = 0,061) satisfeitas. O gráfico
@@ -461,8 +460,8 @@ res_P1 <- analisa_pop(dat_P1, "P1")
 > **SNP quantitativo (item iv):** o modelo com `Geno_num` confirma: coeficiente do
 > SNP não significativo (-0,48; p = 0,625) e interação Grupo$\times$Geno_num também não
 > significativa (p = 0,985). O ajuste é praticamente equivalente ao modelo categórico
-> (R² = 0,353 vs. 0,356), com a variância explicada quase integralmente pelo efeito
-> de subgrupo populacional.
+> (R² = categórico 0.356 | quantitativo 0.353), com a variância explicada quase
+> integralmente pelo efeito de subgrupo populacional.
 
 ### P2 – Efeito aditivo de SNP, sem interação (perfis paralelos)
 
@@ -489,8 +488,7 @@ res_P2 <- analisa_pop(dat_P2, "P2")
 > **Tukey:** o contraste B-A é significativo (~6,2 mmHg; p < 0,001), indicando
 > diferença entre subgrupos. Todos os contrastes entre genótipos são significativos
 > (Aa-aa: +5,6 mmHg, p < 0,001; AA-aa: +17,9 mmHg, p < 0,001; AA-Aa: +12,3 mmHg,
-> p < 0,001), confirmando o efeito aditivo do SNP sobre a pressão diastólica —
-> cada alelo A adicional eleva consistentemente a pressão em ambos os subgrupos.
+> p < 0,001), confirmando o efeito do SNP sobre a pressão diastólica.
 > No Tukey da interação Grupo:Genótipo, os contrastes dentro do mesmo subgrupo
 > entre genótipos distintos são em sua maioria significativos (ex.: A:AA-A:aa,
 > B:AA-B:aa), enquanto contrastes entre subgrupos dentro do mesmo genótipo tendem
@@ -500,17 +498,17 @@ res_P2 <- analisa_pop(dat_P2, "P2")
 > na ANOVA é corroborada: o padrão de diferenças entre genótipos é consistente
 > entre os subgrupos A e B.
 >
-> **SNP quantitativo (item iv):** o modelo com `Geno_num` detecta efeito aditivo
-> linear altamente significativo ($\hat{\beta} = 8,03$ mmHg por alelo A; p < 0,001),
-> confirmando que cada alelo A adicional eleva a pressão diastólica em ~8 mmHg.
-> O efeito de Grupo permanece significativo (~4,4 mmHg; p = 0,026) e a interação
+> **SNP quantitativo (item iv):** o modelo com `Geno_num` detecta efeito
+> do SNP altamente significativo (p < 0,001).
+> O efeito de Grupo permanece significativo (p = 0,026) e a interação
 > Grupo$\times$Geno_num não é significativa (p = 0,215), reforçando a ausência de interação
 > já observada no modelo categórico. O R² é ligeiramente inferior ao do modelo
-> categórico (0,490 vs. 0,511), diferença pequena que reflete a restrição de
-> linearidade imposta pelo modelo quantitativo. Ao assumir que o efeito do SNP
-> é estritamente aditivo, perde-se um grau de liberdade para capturar eventuais
-> desvios de dominância, mas o ganho em interpretabilidade justifica a escolha
-> em casos como este em que o efeito aditivo é predominante.
+> categórico (0,490 vs. 0,511), diferença pequena que reflete a perda de um G.L.
+> causada ao assumir linearidade do efeito de SNP, que assumindo os valores [0, 1, 2]
+> seria necessariamente aditivo, ignorando possíveis efeitos adicionais, como dominância
+> ou recessividade. Em casos como este, que o heterozigoto não está exatamente no ponto
+> médio entre aa e AA, há perda de informação. O uso do SNP quantitativo é, então, ideal
+> somente para casos em que o efeito aditivo é muito mais significativo que quaisquer outros.
 
 ### P3 – Efeito de SNP com interação (epistasia SNP $\times$ Subgrupo)
 
@@ -540,7 +538,7 @@ res_P3 <- analisa_pop(dat_P3, "P3")
 > **Tukey:** o contraste B-A é significativo (~6,5 mmHg; p < 0,001), indicando
 > diferença entre subgrupos. Todos os contrastes entre genótipos são significativos
 > (Aa-aa: +5,8 mmHg, p < 0,001; AA-aa: +17,1 mmHg, p < 0,001; AA-Aa: +11,3 mmHg,
-> p < 0,001), confirmando o efeito aditivo do SNP sobre a pressão diastólica.
+> p < 0,001), confirmando o efeito do SNP sobre a pressão diastólica.
 > No Tukey da interação Grupo:Genótipo, o padrão de contrastes revela claramente
 > a interação SNP$\times$subgrupo: dentro do subgrupo A, o efeito do SNP é moderado
 > (A:AA-A:aa: +9,2 mmHg; p < 0,001), enquanto no subgrupo B é muito mais acentuado
@@ -551,17 +549,18 @@ res_P3 <- analisa_pop(dat_P3, "P3")
 > interação. Estes resultados corroboram a interação significativa observada na
 > ANOVA e o não-paralelismo das linhas no perfil de médias.
 >
-> **SNP quantitativo (item iv):** o modelo com `Geno_num` detecta efeito aditivo
-> linear significativo no subgrupo A ($\hat{\beta} = 4,59$ mmHg por alelo A;
+> **SNP quantitativo (item iv):** o modelo com `Geno_num` assume e detecta efeito
+> aditivo linear significativo no subgrupo A ($\hat{\beta} = 4,59$ mmHg por alelo A;
 > p < 0,001) e uma interação Grupo$\times$Geno_num altamente significativa
-> ($\hat{\beta} = 7,93$; p < 0,001), indicando que o efeito do SNP é ~8 mmHg
+> ($\hat{\beta} = 7,93$; p < 0,001), indicando que o efeito do SNP é
 > maior por alelo A no subgrupo B do que em A — resultado coerente com a interação
 > detectada no modelo categórico. O efeito principal de Grupo não é significativo
 > (p = 0,479). Isso pode ser justificado pois quando há interação, o efeito de Grupo
 > depende do genótipo, não podendo ser interpretado isoladamente. O R² é ligeiramente
 > inferior ao do modelo categórico (0,498 vs. 0,511), diferença pequena que reflete a
-> restrição de linearidade. A conclusão é a mesma: há interação SNP$\times$subgrupo
-> significativa, com o efeito do SNP sendo muito mais pronunciado no subgrupo B.
+> restrição de G.L. causada pela adoção da linearidade. A conclusão é a mesma: há
+> interação SNP$\times$grupo significativa, com o efeito do SNP sendo muito mais
+> pronunciado no grupo B.
 
 ---
 
@@ -571,21 +570,36 @@ res_P3 <- analisa_pop(dat_P3, "P3")
 > consistentes entre populações ou se há heterogeneidade, questão central em
 > estudos de genética de populações.
 
-### (d.i) – Fatorial 3$\times$2$\times$3: SNP $\times$ Grupo $\times$ Populaçao (todos fixos)
+### (d.i) – Fatorial 3 x 2 x 3 : SNP $\times$ Grupo $\times$ Populaçao (todos fixos)
 
 ```{r q2_d1}
 dat_all <- rbind(dat_P1, dat_P2, dat_P3)
 dat_all$Pop <- factor(dat_all$Pop) # Transformo população em var. categórica
 
+# Estatísticas descritivas do dataset combinado
+desc_all <- describeBy(dat_all$Y,
+                       group = list(dat_all$Pop, dat_all$Grupo, dat_all$Genotipo),
+                       mat = TRUE)
+
+tabela_all <- desc_all[, c("group1","group2","group3","n","mean","sd","median","min","max")]
+rownames(tabela_all) <- NULL
+
+knitr::kable(tabela_all, digits = 2,
+             col.names = c("População","Grupo","Genótipo","n","Média","DP","Mediana","Mín","Máx"),
+             caption = "Estatísticas descritivas de Y por População, Grupo e Genótipo")
+
+# Perfil de médias
+with(dat_all,
+     interaction.plot(Genotipo, interaction(Grupo,Pop), Y,
+                      main="Perfil Médias: SNP x Grupo x Populaçao",
+                      xlab="Genótipo", ylab="Média Y",
+                      lwd=2, type="b"))
+
 # Modelo completo 3x2x3
 fit_fixo <- aov(Y ~ Grupo * Genotipo * Pop, data = dat_all)
 summary(fit_fixo)
-
-with(dat_all,
-     interaction.plot(Genotipo, interaction(Grupo,Pop), Y,
-                      main="Perfil Médias: SNP $\times$ Grupo $\times$ Populaçao",
-                      xlab="Genótipo", ylab="Média Y",
-                      lwd=2, type="b"))
+# Coeficientes do modelo
+fit_fixo$coef
 ```
 
 > **Modelo (d.i) — População como fator fixo:** `Y ~ Grupo * Genotipo * Pop`
@@ -596,7 +610,7 @@ with(dat_all,
 > que o padrão de interação SNP$\times$subgrupo é heterogêneo entre populações — como
 > visível no gráfico, onde as inclinações diferem marcadamente entre P1, P2 e P3.
 
-### (d.ii) – Fatorial 3$\times$2 com Populaçao como fator aleatório (ANOVA Mista)
+### (d.ii) – Fatorial 3 x 2 com Populaçao como fator aleatório (ANOVA Mista)
 
 ```{r q2_d2}
 library(lme4)
@@ -604,6 +618,8 @@ library(lme4)
 # Modelo misto: Population como efeito aleatório (intercepto aleatório por Pop)
 fit_misto <- lmer(Y ~ Grupo * Genotipo + (1 | Pop), data = dat_all, REML = TRUE)
 summary(fit_misto)
+# Coeficientes do modelo
+print(coef(fit_misto))
 
 # Teste dos efeitos fixos
 library(lmerTest)
@@ -633,8 +649,9 @@ anova(fit_misto2)
 
 ```{r q3_dicot}
 # Ponto de corte: mediana global de cada dataset
-corte1 <- median(dat1$Y)
-corte2 <- median(dat2$Y)
+#corte1 <- median(dat1$Y)
+corte1 <- 111
+#corte2 <- median(dat2$Y)
 corte_all <- median(dat_all$Y)
 
 dat1$Ybin <- as.factor(ifelse(dat1$Y > corte1, 1, 0))
@@ -642,7 +659,17 @@ dat2$Ybin <- as.factor(ifelse(dat2$Y > corte2, 1, 0))
 dat_all$Ybin <- as.factor(ifelse(dat_all$Y > corte_all, 1, 0))
 
 cat("Ponto de corte Q1:", corte1, " | Distribuição:\n"); print(table(dat1$Ybin))
+
+tab1 <- table(factor(dat1$Ybin, labels = c("baixo", "alto")), dat1$SNP)
+tab1 <- rbind(tab1, "total" = colSums(tab1))
+tab1
+
 cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
+
+tab2 <- table(factor(dat2$Ybin, labels = c("", "")), dat2$SNP)
+tab2 <- rbind(tab2, "total" = colSums(tab2))
+tab2
+
 ```
 
 > **Dicotomização de Y:**
@@ -657,10 +684,10 @@ cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin
 ## Questão 1 (Caso 1) – Regressão Logística
 
 ```{r q3_logit1}
-# Modelo logístico com efeitos aditivo e de dominância
+# Modelo logístico
 fitrl1_ad <- glm(Ybin ~ xa + xd, family=binomial(link="logit"), data=dat1)
 summary(fitrl1_ad)
-cat("\nOR estimados (exp(coef)):\n")
+cat("\nOR estimado (exp(coef)):\n")
 print(exp(coef(fitrl1_ad)))
 cat("\nIC para OR:\n")
 print(exp(confint(fitrl1_ad)))
@@ -674,23 +701,17 @@ cat("Tabela de classificação:\n")
 print(table(Predito=class1r, Observado=dat1$Ybin))
 cat("Acurácia:", round(mean(class1r == dat1$Ybin), 3), "\n")
 
-plot(0:2, tapply(as.numeric(dat1$Ybin)-1, dat1$snp_num, mean),
-     type="b", pch=19, col="blue", xaxt="n",
-     xlab="Genótipo", ylab="P(Y=1 | Genótipo)",
-     main="Prob. estimadas vs. observadas – Regressão Logística (Q1-C1)")
-axis(1, at=0:2, labels=c("aa","Aa","AA"))
-lines(0:2, tapply(pred1r, dat1$snp_num, mean), col="red", lty=2, pch=15, type="b")
-legend("topleft", c("Observado","Predito"), col=c("blue","red"), lty=c(1,2), bty="n")
+#plot(0:2, tapply(as.numeric(dat1$Ybin)-1, dat1$snp_num, mean),
+#     type="b", pch=19, col="blue", xaxt="n",
+#     xlab="Genótipo", ylab="P(Y=1 | Genótipo)",
+#     main="Prob. estimadas vs. observadas – Regressão Logística (Q1-C1)")
+#axis(1, at=0:2, labels=c("aa","Aa","AA"))
+#lines(0:2, tapply(pred1r, dat1$snp_num, mean), col="red", lty=2, pch=15, type="b")
+#legend("topleft", c("Observado","Predito"), col=c("blue","red"), lty=c(1,2), bty="n")
 ```
 
 > **Regressão Logística – Q1 Caso 1:**
-> O efeito aditivo (`xa`) é altamente significativo (z = 4,91; p < 0,001), com
-> OR = 4,04 (IC 95%: 2,43–7,61), indicando que cada alelo A adicional quadruplica
-> aproximadamente a chance de Y estar acima da mediana. O efeito de dominância
-> (`xd`) não é significativo (p = 0,337), consistente com a ANOVA. O modelo
-> classifica corretamente 72% das observações, e o gráfico de probabilidades
-> preditas vs. observadas mostra excelente concordância — as curvas são praticamente
-> sobrepostas — com probabilidade crescendo de ~0,28 em aa para ~0,77 em AA.
+> 
 
 ---
 
