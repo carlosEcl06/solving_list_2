@@ -213,8 +213,7 @@ with(dat2,
 
 > O perfil de médias evidencia epistasia entre SNP1 e SNP2: o efeito de cada SNP sobre Y
 > depende do genótipo do outro. Quanto mais alelos A1 o indivíduo carrega, maior o ganho
-> em Y proporcionado pelos alelos A2 — padrão consistente com a epistasia aditiva $\times$ aditiva
-> ($a_1 \times a_2 = 3$) simulada no modelo verdadeiro.
+> em Y proporcionado pelos alelos A2.
 
 ### Modelo com efeitos aditivos, dominância e interações (8 g.l.)
 
@@ -256,12 +255,13 @@ anova(fit2_reduzido,fit2_completo)
 >
 > **Efeitos principais:** os efeitos aditivos de ambos os SNPs são significativos —
 > `xa1` ($\hat{a}_1 = 8,74$; p < 0,001) e `xa2` ($\hat{a}_2 = 4,67$; p < 0,001) —
-> indicando que cada alelo A adicional em cada loco eleva Y independentemente,
-> próximo aos valores verdadeiros simulados ($a_1 = 8$, $a_2 = 6$). Os efeitos de
+> indicando que cada alelo A adicional em cada loco eleva Y independentemente. Os efeitos de
 > dominância `xd1` e `xd2` também são significativos pelo summary (p < 0,001 e p < 0,01).
 > Entretanto, como foi detectada epistasia aditiva$\times$aditiva e
 > dominância$\times$aditiva entre os alelos, a interpretação isolada dos efeitos
-> principais pode não ser adequada.
+> principais pode não ser adequada. Nota: É interessante notar que os coeficientes
+> recuperados para `xa1`, `xa2`, `xd1` e `xd2` foram próximos dos reais usados
+> na geração: (a1 = 8; d1 = 4; a2 = 6; d2 = 3).
 >
 > **Epistasia:** as interações aditiva$\times$aditiva `xa1:xa2` e
 > dominância$\times$aditiva `xd1:xa2` são significativas na tabela
@@ -436,14 +436,13 @@ res_P1 <- analisa_pop(dat_P1, "P1")
 > **Perfil de médias e boxplot:** as linhas do perfil de médias oscilam levemente
 > entre genótipos — a linha do subgrupo B sobe de aa para Aa e recua em AA, enquanto
 > a do subgrupo A desce ligeiramente — mas essas variações refletem apenas flutuação
-> amostral em torno das médias verdadeiras (80 mmHg em A e 90 mmHg em B para todos
-> os genótipos). A separação vertical entre subgrupos é consistente e visualmente
-> dominante. O boxplot corrobora: as distribuições dentro de cada subgrupo são
-> similares entre genótipos, com dispersão compatível com $\sigma = 8$ mmHg.
+> amostral, hipótese fortalecida pelos testes seguintes. A separação vertical entre
+> subgrupos é consistente e visualmente dominante. O boxplot corrobora: as distribuições
+> dentro de cada subgrupo são similares entre genótipos.
 >
 > **ANOVA:** apenas o efeito de Grupo é significativo (F = 94,96; p < 0,001). Os efeitos de
 > Genótipo (F = 0,27; p = 0,761) e da interação Grupo$\times$Genótipo (F = 0,28; p = 0,755)
-> não são significativos, como esperado pela estrutura simulada.
+> não são significativos.
 >
 > **Diagnóstico:** normalidade (Shapiro-Wilk: W = 0,994; p = 0,744) e
 > homocedasticidade (Bartlett: K² = 10,56; p = 0,061) satisfeitas. O gráfico
@@ -474,16 +473,15 @@ res_P2 <- analisa_pop(dat_P2, "P2")
 > **Perfil de médias e boxplot:** as linhas do perfil de médias variam de forma ascendente
 > entre os genótipos. As linhas dos subgrupos são aproximadamente paralelas, indicando
 > independência do efeito do SNP em relação ao subgrupo. O boxplot corrobora: as distribuições
-> dentro de cada subgrupo mostram aumento progressivo da mediana e da média de Y de aa para AA,
-> com dispersão compatível com $\sigma = 8$ mmHg.
+> dentro de cada subgrupo mostram aumento progressivo da mediana e da média de Y de aa para AA.
 >
 > **ANOVA:** são significativos tanto o efeito de Grupo(F = 26,63; p < 0,001) quanto do
 > Genótipo (F = 76,47; p < 0,001). Já interação Grupo$\times$Genótipo é não significativa
-> (F = 1,134; p = 0,324), como esperado pela estrutura simulada.
+> (F = 1,134; p = 0,324).
 >
 > **Diagnóstico:** normalidade (Shapiro-Wilk: W = 0,993; p = 0,531) e
 > homocedasticidade (Bartlett: K² = 1,831; p = 0,872) satisfeitas. O gráfico
-> "Constant Leverage" mostra resíduos bem distribuídos distribuídos.
+> "Constant Leverage" mostra resíduos bem distribuídos.
 >
 > **Tukey:** o contraste B-A é significativo (~6,2 mmHg; p < 0,001), indicando
 > diferença entre subgrupos. Todos os contrastes entre genótipos são significativos
@@ -525,7 +523,7 @@ res_P3 <- analisa_pop(dat_P3, "P3")
 >
 > **ANOVA:** são significativos ambos o efeito de Grupo(F = 26,87; p < 0,001) e de
 > Genótipo (F = 64,10; p < 0,001). E também é significativa a interação Grupo$\times$Genótipo
-> (F = 13,50; p < 0,001), como esperado pela estrutura simulada.
+> (F = 13,50; p < 0,001).
 >
 > **Diagnóstico:** normalidade (Shapiro-Wilk: W = 0,995; p = 0,811) e
 > homocedasticidade (Bartlett: K² = 3,645; p = 0,602) satisfeitas. O gráfico
@@ -649,9 +647,8 @@ anova(fit_misto2)
 
 ```{r q3_dicot}
 # Ponto de corte: mediana global de cada dataset
-#corte1 <- median(dat1$Y)
-corte1 <- 111
-#corte2 <- median(dat2$Y)
+corte1 <- median(dat1$Y)
+corte2 <- median(dat2$Y)
 corte_all <- median(dat_all$Y)
 
 dat1$Ybin <- as.factor(ifelse(dat1$Y > corte1, 1, 0))
@@ -664,11 +661,11 @@ tab1 <- table(factor(dat1$Ybin, labels = c("baixo", "alto")), dat1$SNP)
 tab1 <- rbind(tab1, "total" = colSums(tab1))
 tab1
 
-cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
+#cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
 
-tab2 <- table(factor(dat2$Ybin, labels = c("", "")), dat2$SNP)
-tab2 <- rbind(tab2, "total" = colSums(tab2))
-tab2
+#tab2 <- table(factor(dat2$Ybin, labels = c("ph1", "ph2")), dat2$SNP)
+#tab2 <- rbind(tab2, "total" = colSums(tab2))
+#tab2
 
 ```
 
@@ -685,7 +682,7 @@ tab2
 
 ```{r q3_logit1}
 # Modelo logístico
-fitrl1_ad <- glm(Ybin ~ xa + xd, family=binomial(link="logit"), data=dat1)
+fitrl1_ad <- glm(as.factor(Ybin) ~ xa + xd, family=binomial(link="logit"), data=dat1)
 summary(fitrl1_ad)
 cat("\nOR estimado (exp(coef)):\n")
 print(exp(coef(fitrl1_ad)))
@@ -711,7 +708,41 @@ cat("Acurácia:", round(mean(class1r == dat1$Ybin), 3), "\n")
 ```
 
 > **Regressão Logística – Q1 Caso 1:**
-> 
+> O estabelecimento do valor corte para dicotomização de Y na mediana dos dados causou
+> um fenômeno de separação completa dos grupos devido à ausência de observações "baixas"
+> para o genótipo `AA`. Isso fez o modelo de regressão logística não recuperar adequadamente
+> os coeficientes para os efeitos aditivo e de dominância, que tiveram a significância
+> ignorada. Decidimos então voltar atrás e definir arbitrariamente um valor de corte
+> que não deixasse valores nulos na tabela de contingência "altos *versus* baixos."
+
+```{r q3 caso1_redo}
+corte1 <- 111
+dat1$Ybin <- as.factor(ifelse(dat1$Y > corte1, 1, 0))
+
+cat("Ponto de corte Q1:", corte1, " | Distribuição:\n"); print(table(dat1$Ybin))
+tab1 <- table(factor(dat1$Ybin, labels = c("baixo", "alto")), dat1$SNP)
+tab1 <- rbind(tab1, "total" = colSums(tab1))
+tab1
+
+fitrl1_ad <- glm(as.factor(Ybin) ~ xa + xd, family=binomial(link="logit"), data=dat1)
+summary(fitrl1_ad)
+cat("\nOR estimado (exp(coef)):\n")
+print(exp(coef(fitrl1_ad)))
+cat("\nIC para OR:\n")
+print(exp(confint(fitrl1_ad)))
+
+pred1r <- predict(fitrl1_ad, type="response")
+class1r <- ifelse(pred1r >= 0.5, 1, 0)
+cat("Tabela de classificação:\n")
+print(table(Predito=class1r, Observado=dat1$Ybin))
+cat("Acurácia:", round(mean(class1r == dat1$Ybin), 3), "\n")
+```
+
+> **Regressão Logística – Q1 Caso 1 (com corte arbitrário):**
+> Dessa vez, conseguimos evitar a separação total dos grupos, possibilitando que
+> o modelo recuperasse adequadamente os coeficientes, resultando em
+> $\log(\frac{\rho}{1-\rho}) = -0.4904 + 3.0931\times x_a + 1.7589\times x_d$,
+> com significância para ambos ($p_{x_a} = 3.85 \times 10^{-12}$; $p_{x_d} = 0.00039$).
 
 ---
 
