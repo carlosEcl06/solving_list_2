@@ -661,20 +661,27 @@ tab1 <- table(factor(dat1$Ybin, labels = c("baixo", "alto")), dat1$SNP)
 tab1 <- rbind(tab1, "total" = colSums(tab1))
 tab1
 
-#cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
+cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
 
-#tab2 <- table(factor(dat2$Ybin, labels = c("ph1", "ph2")), dat2$SNP)
-#tab2 <- rbind(tab2, "total" = colSums(tab2))
-#tab2
+plot <- ggplot2::ggplot(dat2, ggplot2::aes(x = SNP1, fill = SNP2)) +
+  ggplot2::geom_bar(position = ggplot2::position_dodge()) +
+  ggplot2::facet_wrap(~ Ybin) +
+  ggplot2::scale_fill_brewer(type = "qual", palette = "Set2", name = "SNP2") +
+  ggplot2::labs(
+    title = "Contingência – Q2 (SNP1 x SNP2 x Resposta)",
+    x = "Genótipo SNP1",
+    y = "Contagem"
+  ) +
+  ggplot2::theme_minimal()
 
+print(plot)
 ```
 
 > **Dicotomização de Y:**
 > A mediana é adotada como ponto de corte, resultando em distribuição perfeitamente
 > balanceada: 150 observações em cada classe para Q1 (corte = 107,93) e 225 para Q2
 > (corte = 99,44). Essa escolha maximiza o poder do teste logístico, mas é arbitrária
-> — um corte clinicamente motivado (ex.: PAD > 90 mmHg para hipertensão) seria
-> igualmente válido e potencialmente mais interpretável.
+> — um corte clinicamente motivado seria igualmente válido e potencialmente mais interpretável.
 
 ---
 
@@ -768,16 +775,81 @@ cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
 ```
 
 > **Regressão Logística – Q1 Caso 2:**
-> O modelo apresenta sérios problemas de convergência — os erros padrão são
-> enormes (~162,7 para todos os coeficientes) e os p-valores são próximos de 1,
-> indicando **separação completa ou quase-completa** dos dados: com 9 combinações
-> genotípicas e Y dicotomizado pela mediana, o modelo logístico consegue separar
-> perfeitamente (ou quase) as classes, tornando as estimativas instáveis. Os ORs
-> estimados são numericamente absurdos (ex.: OR = 79 para `xa1`) e os ICs incluem
-> 0 e infinito. A acurácia de 70,7% é razoável, mas as estimativas não são
-> confiáveis. Neste caso, a regressão logística é inadequada com este tamanho
-> amostral e parametrização — o modelo ANOVA sobre Y contínuo é claramente
-> preferível.
+> O estabelecimento do valor corte para dicotomização de Y na mediana dos dados causou
+> uma separação muito desbalanceada entre os grupos `resposta` e `não resposta`, que
+> acreditamos ter atrapalhado a eficácia do teste. Decidimos então, tentar novamente
+> com um corte manual.
+
+```{r q3 caso2_redo}
+corte2 <- 105
+dat2$Ybin <- as.factor(ifelse(dat2$Y > corte2, 1, 0))
+
+cat("Ponto de corte Q2:", corte2, " | Distribuição:\n"); print(table(dat2$Ybin))
+
+plot <- ggplot2::ggplot(dat2, ggplot2::aes(x = SNP1, fill = SNP2)) +
+  ggplot2::geom_bar(position = ggplot2::position_dodge()) +
+  ggplot2::facet_wrap(~ Ybin) +
+  ggplot2::scale_fill_brewer(type = "qual", palette = "Set2", name = "SNP2") +
+  ggplot2::labs(
+    title = "Contingência – Q2 (SNP1 x SNP2 x Resposta)",
+    x = "Genótipo SNP1",
+    y = "Contagem"
+  ) +
+  ggplot2::theme_minimal()
+
+print(plot)
+
+fitrl2 <- glm(Ybin ~ xa1 + xd1 + xa2 + xd2 +
+                     xa1:xa2 + xa1:xd2 + xd1:xa2 + xd1:xd2,
+              family=binomial(link="logit"), data=dat2)
+summary(fitrl2)
+cat("\nOR estimados:\n")
+print(round(exp(coef(fitrl2)), 3))
+cat("\nIC para OR:\n")
+print(round(exp(confint(fitrl2)), 3))
+
+pred2r <- predict(fitrl2, type="response")
+class2r <- ifelse(pred2r >= 0.5, 1, 0)
+cat("Tabela de classificação:\n")
+print(table(Predito=class2r, Observado=dat2$Ybin))
+cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
+```
+
+> **Regressão Logística – Q1 Caso 2 (corte manual):**
+> Foi desafiador definir um valor de corte que gerasse uma separação mais equilibrada entre os grupos,
+> mas com o corte em 105, conseguimos ao menos evitar grupos zerados ou com representações excessivamente
+> baixas. Apesar disso, notamos que o modelo logístico apresentou perda de significância em relação à ANOVA
+> para o efeito de dominância do SNP2 e para a interação `xa1:xa2`. Esse cenário, inclusive, mostrou-se
+> facilmente influenciado pelos vários valores de corte que experimentamos. Hora era detectada significância
+> de alguns efeitos, hora de outros.
+> Podemos ver que houve impacto significativo na adoção da categorização da resposta Y. Tornou-se mais desafiador
+> por conta, acreditamos, das grandes separação e dispersão existentes nos dados.
+> Entretanto, já que no ANOVA nós trabalhamos com um modelo reduzido, decidimos experimentar a mesma abordagem
+> aqui, removendo efeitos que antes não haviam sido dados como significativos, a fim de focar nos efeitos de
+> interesse.
+
+```{r q1_caso2_logit_reduzido}
+fitrl2_reduzido <- glm(Ybin ~ xa1 + xd1 + xa2 + xd2 +
+                              xa1:xa2 + xd1:xa2,
+              family=binomial(link="logit"), data=dat2)
+summary(fitrl2_reduzido)
+cat("\nOR estimados:\n")
+print(round(exp(coef(fitrl2_reduzido)), 3))
+cat("\nIC para OR:\n")
+print(round(exp(confint(fitrl2_reduzido)), 3))
+
+pred2r <- predict(fitrl2_reduzido, type="response")
+class2r <- ifelse(pred2r >= 0.5, 1, 0)
+cat("Tabela de classificação:\n")
+print(table(Predito=class2r, Observado=dat2$Ybin))
+cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
+```
+
+> **Regressão Logística – Q1 Caso 2 (modelo reduzido):**
+> Agora, com um modelo reduzido, baseado naquele que utilizamos no ANOVA, conseguimos
+> recuperar a significância para o efeito de dominância do SNP2, mas não o efeito da
+> interação `xa1:xa2`. Acreditamos então, depois de tantas tentativas, que a regressão
+> logística para esse caro é inadequada por gerar perda de informação.
 
 ---
 
