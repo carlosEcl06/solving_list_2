@@ -777,8 +777,9 @@ cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
 > **Regressão Logística – Q1 Caso 2:**
 > O estabelecimento do valor corte para dicotomização de Y na mediana dos dados causou
 > uma separação muito desbalanceada entre os grupos `resposta` e `não resposta`, que
-> acreditamos ter atrapalhado a eficácia do teste. Decidimos então, tentar novamente
-> com um corte manual.
+> acreditamos ter atrapalhado a eficácia do teste. No teste preditivo usando o modelo,
+> foi obtida uma acurária baixa (72,4%), o que atesta a limitação do método. Decidimos
+> então, tentar novamente com um corte manual.
 
 ```{r q3 caso2_redo}
 corte2 <- 105
@@ -821,7 +822,8 @@ cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
 > baixas. Apesar disso, notamos que o modelo logístico apresentou perda de significância em relação à ANOVA
 > para o efeito de dominância do SNP2 e para a interação `xa1:xa2`. Esse cenário, inclusive, mostrou-se
 > facilmente influenciado pelos vários valores de corte que experimentamos. Hora era detectada significância
-> de alguns efeitos, hora de outros.
+> de alguns efeitos, hora de outros. O teste preditivo melhorou um pouco em relação à definição do corte na
+> mediana (de 72,4% para 77,1%), mas ainda assim ficou aquém do ideal, reforçando a limitação.
 > Podemos ver que houve impacto significativo na adoção da categorização da resposta Y. Tornou-se mais desafiador
 > por conta, acreditamos, das grandes separação e dispersão existentes nos dados.
 > Entretanto, já que no ANOVA nós trabalhamos com um modelo reduzido, decidimos experimentar a mesma abordagem
@@ -843,13 +845,17 @@ class2r <- ifelse(pred2r >= 0.5, 1, 0)
 cat("Tabela de classificação:\n")
 print(table(Predito=class2r, Observado=dat2$Ybin))
 cat("Acurácia:", round(mean(class2r == dat2$Ybin), 3), "\n")
+
+anova(fitrl2_reduzido, fitrl2)
 ```
 
 > **Regressão Logística – Q1 Caso 2 (modelo reduzido):**
 > Agora, com um modelo reduzido, baseado naquele que utilizamos no ANOVA, conseguimos
 > recuperar a significância para o efeito de dominância do SNP2, mas não o efeito da
-> interação `xa1:xa2`. Acreditamos então, depois de tantas tentativas, que a regressão
-> logística para esse caro é inadequada por gerar perda de informação.
+> interação `xa1:xa2`. A acurácia preditiva permaneceu igual (77,1%), corroborando o
+> resultado da ANOVA comparando o modelo reduzido ao logístico original (p = 0.6997).
+> Acreditamos então, depois de tantas tentativas, que a regressão logística para esse
+> caso é inadequada por gerar perda de informação.
 
 ---
 
@@ -860,16 +866,29 @@ logistica_pop <- function(dat, nome) {
   cat("\n\n==============================\n")
   cat(" POPULAÇÃO:", nome, "\n==============================\n")
   
-  # Codificação aditiva/dominância para SNP
-  dat$xa_snp <- dat$Geno_num - 1
-  dat$xd_snp <- ifelse(dat$Geno_num==1, 1, 0)
-  dat$Grupo_bin <- ifelse(dat$Grupo=="A", 0, 1)
-  
   # Dicotomizar Y
-  corte_local <- median(dat$Y)
+  corte_local <- 90 # escolhemos um corte fixo aqui por conhecermos a natureza biológica dos dados (assumimos que se trata de pressão diastólica em repouso)
   dat$Ybin <- as.factor(ifelse(dat$Y > corte_local, 1, 0))
 
-  fit_logit <- glm(Ybin ~ Grupo_bin * (xa_snp + xd_snp),
+  # Visualizando contingência dos dados dicotomizados
+  plot <- ggplot2::ggplot(dat, ggplot2::aes(x = Grupo, fill = Genotipo)) +
+            ggplot2::geom_bar(position = ggplot2::position_dodge()) +
+            ggplot2::facet_wrap(
+              ~ Ybin,
+              labeller = ggplot2::labeller(Ybin = c("0" = "normal", "1" = "hipertenso"))
+            ) +
+            ggplot2::scale_fill_brewer(type = "qual", palette = "Set2", name = "Genótipo") +
+            ggplot2::labs(
+              title = paste0("Contingência – População: ", nome),
+              x = "Grupo",
+              y = "Contagem"
+            ) +
+            ggplot2::theme_minimal()
+
+  print(plot)
+
+  # Fit do modelo logístico
+  fit_logit <- glm(Ybin ~ Grupo * Genotipo,
                    family=binomial(link="logit"), data=dat)
   cat("\nModelo logístico – fator categórico:\n")
   print(summary(fit_logit))
@@ -881,11 +900,18 @@ logistica_pop <- function(dat, nome) {
   class_r <- ifelse(pred_r >= 0.5, 1, 0)
   cat("\nAcurácia:", round(mean(class_r == dat$Ybin), 3), "\n")
 
-  # Comparação com ANOVA para o mesmo dado
-  cat("\n[ANOVA correspondente – para comparação]\n")
-  fit_anova <- lm(Y ~ Grupo * Genotipo, data=dat)
-  cat("ANOVA p-valor Genotipo:", anova(fit_anova)["Genotipo","Pr(>F)"], "\n")
-  cat("Logístico p-valor xa:  ", summary(fit_logit)$coef["xa_snp","Pr(>|z|)"], "\n")
+  # Fit do modelo logístico com Genótipo quantitativo
+  fit_logit <- glm(Ybin ~ Grupo * Geno_num,
+                   family=binomial(link="logit"), data=dat)
+  cat("\nModelo logístico – genótipo quantitativo:\n")
+  print(summary(fit_logit))
+  cat("\nOR estimados:\n")
+  print(round(exp(coef(fit_logit)), 3))
+
+  # Prob preditas
+  pred_r <- predict(fit_logit, type="response")
+  class_r <- ifelse(pred_r >= 0.5, 1, 0)
+  cat("\nAcurácia:", round(mean(class_r == dat$Ybin), 3), "\n")
 
   invisible(fit_logit)
 }
@@ -896,34 +922,75 @@ logistica_pop(dat_P3, "P3")
 ```
 
 > **Regressão Logística por população:**
-> **P1:** o efeito de `xa_snp` não é significativo (p = 0,075), consistente com
-> a ANOVA (p = 0,761). Apenas `Grupo_bin` é significativo (OR = 7,32; p < 0,001),
-> refletindo a diferença entre subgrupos. Note-se, porém, que a interação
-> `Grupo_bin:xa_snp` aparece significativa (p = 0,039) — resultado espúrio ausente
-> na ANOVA, possivelmente devido à dicotomização combinada com o tamanho amostral
-> moderado.
+> **P1:** assim como no teste original feito com ANOVA, temos que o efeito do `Genotipo` não é
+> significativo, mas sim somente o efeito de `Grupo` (p < 0,001). Apesar da acurácia do teste
+> preditivo não ter sido tão alta (76,1%), a regressão logística trouxe a mesma significância
+> que ANOVA, levando à mesma conclusão. O mesmo resultado de significâncias foi obtido tanto
+> com SNP considerado categórico como quando numérico.
 >
-> **P2:** `xa_snp` é significativo (p < 0,001), com OR = 5,70, confirmando o efeito
-> aditivo do SNP. A interação `Grupo_bin:xa_snp` não é significativa (p = 0,495),
-> coerente com a ausência de interação na ANOVA. Acurácia de 76,7%.
+> **P2:** nesta população, ao trabalhar com Y dicotomizado com corte em 90mmHg, não foi detectado
+> efeito significativo de `Grupo`, apenas de `Genotipo` (com genótipo categórico, especificamente o
+> AA). Ao examinar o perfil dos dados, isso faz sentido, pois para ambos os grupos, os genótipos
+> aa e Aa encontram-se contidos abaixo de 90mmHg. Apenas o genótipo AA possui observações acima
+> do *threshold* estabelecido, sendo uma pequena porção do grupo A e a maioria esmagadora de B.
+> O mesmo resultado de significâncias foi obtido tanto com SNP considerado categórico como quando
+> numérico. A diferença deste teste em relação à ANOVA não é uma limitação da metodologia em si, mas
+> consequência da mudança da natureza do estudo, uma vez que não mais estudamos o efeito das variáveis
+> sobre o valor Y em si, mas sim a sua influência no "shift" de uma condição clínica.
 >
-> **P3:** `xa_snp` é significativo (p < 0,001; OR = 4,05), mas a interação
-> `Grupo_bin:xa_snp` **não** atinge significância (p = 0,171) — ao contrário da
-> ANOVA, que detectou interação clara (p < 0,001). Este é um exemplo concreto de
-> perda de poder pela dicotomização: a interação SNP×subgrupo, evidente nos dados
-> contínuos, torna-se indetectável após o corte na mediana.
+> **P3:** com Y dicotomizado e SNP categórico, o efeito de grupo foi não-significativo (p = 0.56), e
+> genótipo foi significativo apenas para AA. Isso pode ser explicado, mais uma vez, pelo perfil dos
+> próprios dados. O mesmo cenário observado em P2, em que aa e Aa ficaram concentrados no grupo
+> `normal`, pode ser observado aqui. Já a interação `GrupoB:GenotipoAA` teve significância, devido
+> à importância do genótipo para o efeito de grupo. No perfil de médias, vemos que AA:A está abaixo
+> de 90mmHg, diferente de AA:B. O mesmo resultado foi obtido com genótipo quantitativo: significância
+> para `Genotipo` e para `GrupoB:Geno_num`. Mais uma vez, a diferença se dá pela mudança de foco do
+> estudo em si.
 
 ---
 
 ## Regressão Logística Combinada (3 populações)
 
 ```{r q3_logit_all}
-dat_all$xa_snp   <- dat_all$Geno_num - 1
-dat_all$xd_snp   <- ifelse(dat_all$Geno_num==1, 1, 0)
-dat_all$Grupo_bin <- ifelse(dat_all$Grupo=="A", 0, 1)
+# Contingência
+contagem <- as.data.frame(table(dat_all$Grupo,
+                                dat_all$Pop,
+                                dat_all$Genotipo,
+                                dat_all$Ybin))
+names(contagem) <- c("Grupo", "Pop", "Genotipo", "Ybin", "Freq")
+contagem$Grupo <- factor(contagem$Grupo, levels = c("A", "B"))
+contagem$Pop <- factor(contagem$Pop, levels = c("P1", "P2", "P3"))
+contagem$Genotipo <- factor(contagem$Genotipo, levels = c("aa", "Aa", "AA"))
+contagem$Ybin <- factor(contagem$Ybin, levels = c("0", "1"))
+
+plot <- ggplot2::ggplot(contagem,
+                        ggplot2::aes(x = Grupo,
+                                     y = Pop,
+                                     fill = Genotipo,
+                                     size = Freq)) +
+  ggplot2::geom_point(position = ggplot2::position_dodge(width = 0.8),
+                      shape = 21,
+                      color = "black",
+                      alpha = 0.8) +
+  ggplot2::facet_wrap(
+    ~ Ybin,
+    labeller = ggplot2::labeller(
+      Ybin = c("0" = "normal", "1" = "hipertenso")
+    )
+  ) +
+  ggplot2::scale_fill_brewer(type = "qual", palette = "Set2", name = "Genótipo") +
+  ggplot2::scale_size_area(max_size = 16, guide = ggplot2::guide_legend(title = "Contagem")) +
+  ggplot2::labs(
+    title = "Contingência de Y dicotomizada para as 3 populações",
+    x = "Grupo",
+    y = "População"
+  ) +
+  ggplot2::theme_minimal()
+
+print(plot)
 
 # Efeito fixo de Pop
-fitrl_all_fixo <- glm(Ybin ~ Grupo_bin * (xa_snp + xd_snp) + Pop,
+fitrl_all_fixo <- glm(Ybin ~ Grupo * Genotipo * Pop,
                       family=binomial(link="logit"), data=dat_all)
 summary(fitrl_all_fixo)
 cat("\nOR estimados:\n")
@@ -931,19 +998,29 @@ print(round(exp(coef(fitrl_all_fixo)), 3))
 
 # Modelo misto logístico (Pop aleatório)
 library(lme4)
-fitrl_all_misto <- glmer(Ybin ~ Grupo_bin * (xa_snp + xd_snp) + (1|Pop),
+fitrl_all_misto <- glmer(Ybin ~ Grupo * Genotipo + (1|Pop),
                          family=binomial(link="logit"), data=dat_all)
 summary(fitrl_all_misto)
 ```
 
 > **Regressão Logística combinada:**
-> No modelo com Pop fixo, `Grupo_bin` (OR = 3,93; p < 0,001) e `xa_snp`
-> (OR = 2,11; p < 0,001) são significativos. `PopP3` é significativo (p = 0,010),
-> indicando que P3 tem menor chance basal de Y=1 em relação a P1. A interação
-> `Grupo_bin:xa_snp` é marginalmente não significativa (p = 0,050). No modelo
-> misto (`glmer`), a variância entre populações é ínfima
-> ($\hat{\sigma}^2_{Pop} = 0,037$) e os efeitos fixos são praticamente idênticos
-> ao modelo fixo, confirmando a robustez das conclusões.
+> No modelo logístico considerando as três variáveis fixas, tivemos como significativas
+> somente `GrupoB`, `Pop2`, `Pop3`, `GenotipoAA:Pop2` e `GenotipoAA:Pop3`; ou seja,
+> reconheceu-se tanto do efeito de grupo quanto da população como relevantes para a
+> hipertensão, assim o efeito combinado de População e do genótipo homozigoto dominante.
+> Isso é um resultado bem diferente do observado na questão 2.d com ANOVA, mas examinando
+> os perfis de médias dos dados, é possível ver que cada um dos efeitos detectados faz sentido.
+> As únicas caselas que se concentram acima do *threshold* são do Grupo B e Populações 2 e 3,
+> e a grupo B $/times$ P1 tem média em torno de 90mmHg, distribuindo-se uniformemente entre
+> os desfechos clínicos da variável dicotomizada. O efeito do genótipo AA sozinho realmente não
+> leva as médias àcima de 90mmHg, mas com Pop = P2 ou P3 e Grupo B, o salto é expressivo.
+> Vemos aqui outro bom exemplo de como a dicotomização da variável estudada muda de acordo
+> com o objetivo do estudo em si.
+> No modelo com Pop como variável aleatória, foram considerados significativos o `GrupoB` e
+> `GenotipoAA`. Mas a interação `GrupoB:GenotipoAA` não foi mais significativa, o que pode
+> ser explicado pela redução do poder causada pela inclusão de um efeito aleatório, que é
+> uma consequência da mudança de foco do estudo, que agora é mais voltado para a generalização
+> dos resultados para além das populações estudadas, e não mais para a comparação entre elas.
 
 ---
 
