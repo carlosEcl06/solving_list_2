@@ -614,30 +614,34 @@ fit_fixo$coef
 library(lme4)
 
 # Modelo misto: Population como efeito aleatório (intercepto aleatório por Pop)
-fit_misto <- lmer(Y ~ Grupo * Genotipo + (1 | Pop), data = dat_all, REML = TRUE)
+fit_misto <- lmer(Y ~ Grupo * Genotipo * (1 | Pop), data = dat_all)
 summary(fit_misto)
 # Coeficientes do modelo
 print(coef(fit_misto))
-
-# Teste dos efeitos fixos
-library(lmerTest)
-fit_misto2 <- lmer(Y ~ Grupo * Genotipo + (1 | Pop), data = dat_all, REML = FALSE)
-anova(fit_misto2)
+# IC dos efeitos fixos
+confint(fit_misto, method="Wald")
+# IC profile
+confint(fit_misto)
+# IC bootstrap
+confint(fit_misto, method="boot", nsim=1000)
 ```
 
-> **Modelo (d.ii) — População como fator aleatório:** `Y ~ Grupo * Genotipo + (1|Pop)`
-> é adequado quando as populações são entendidas como amostra de um universo mais
-> amplo, generalizando as inferências além das 3 observadas. A variância entre
-> populações é ínfima ($\hat{\sigma}^2_{Pop} = 0,091$) frente à residual
-> ($\hat{\sigma}^2 = 81,05$), e os efeitos fixos de Grupo, Genótipo e sua interação
-> permanecem significativos. Uma importante limitação deste modelo é que ele
-> assume homogeneidade dos efeitos fixos entre populações, algo que já sabemos que
-> não ocorre pelo modelo fixo do item anterior. Uma possível melhoria seria trabalhar
-> com `(Genotipo | Pop)`, permitindo que a inclinação do efeito do SNP também varie
-> aleatoriamente entre populações. Porém, estimar essa matriz de variância-covariância
-> na prática com apenas 3 populações é inviável, pois o modelo dificilmente iria convergir
-> de forma estável, então esta argumentação serve mais como motivação para designs
-> futuros com maior número de populações.
+> **Modelo (d.ii) — População como fator aleatório:** `Y ~ Grupo * Genotipo * (1|Pop)`
+> a população como efeito aleatório não se mostrou importante para o conjunto de dados.
+> A variância praticamente nula (0,091) em relação ao resíduo (81,054) indica que a heterogeneidade
+> entre populações é pequena comparada à variação dentro das populações. Os efeitos fixos de `GrupoB`
+> e `GenotipoAA` permanecem altamente significativos (p < 0,001), assim como a interação
+> `GrupoB:GenotipoAA`. Então, embora no modelo d.i a interação de População como efeito fixo com
+> os demais fatores fosse importante, ao considerá-la aleatória, o efeito de grupo e genótipo se
+> sobressaem. Nesse caso então, uma generalização dos efeitos de Grupo e Genótipo para além das
+> três populações observadas é plausível e sustentada pelos dados: a estabilidade dos efeitos fixos
+> entre populações sugere que a associação do SNP e do fator de grupo com a pressão diastólica não
+> é específica de população. Contudo, essa conclusão deve ser interpretada com cautela, pois com
+> apenas três populações o modelo aleatório não possui poder suficiente para estimar com precisão
+> a variabilidade interpopulacional no universo amostral. Os intervalos de confiança para o
+> desvio-padrão do efeito aleatório (.sig01) incluem zero em ambos os métodos avaliados (profile e
+> bootstrap). Portanto, a ausência de variância interpopulacional detectável pode refletir tanto
+> homogeneidade real entre populações quanto limitação de poder amostral.
 
 ---
 
@@ -704,14 +708,6 @@ class1r <- ifelse(pred1r >= 0.5, 1, 0)
 cat("Tabela de classificação:\n")
 print(table(Predito=class1r, Observado=dat1$Ybin))
 cat("Acurácia:", round(mean(class1r == dat1$Ybin), 3), "\n")
-
-#plot(0:2, tapply(as.numeric(dat1$Ybin)-1, dat1$snp_num, mean),
-#     type="b", pch=19, col="blue", xaxt="n",
-#     xlab="Genótipo", ylab="P(Y=1 | Genótipo)",
-#     main="Prob. estimadas vs. observadas – Regressão Logística (Q1-C1)")
-#axis(1, at=0:2, labels=c("aa","Aa","AA"))
-#lines(0:2, tapply(pred1r, dat1$snp_num, mean), col="red", lty=2, pch=15, type="b")
-#legend("topleft", c("Observado","Predito"), col=c("blue","red"), lty=c(1,2), bty="n")
 ```
 
 > **Regressão Logística – Q1 Caso 1:**
@@ -998,9 +994,10 @@ print(round(exp(coef(fitrl_all_fixo)), 3))
 
 # Modelo misto logístico (Pop aleatório)
 library(lme4)
-fitrl_all_misto <- glmer(Ybin ~ Grupo * Genotipo + (1|Pop),
+fitrl_all_misto <- glmer(Ybin ~ Grupo * Genotipo * (1|Pop),
                          family=binomial(link="logit"), data=dat_all)
 summary(fitrl_all_misto)
+confint(fitrl_all_misto)
 ```
 
 > **Regressão Logística combinada:**
@@ -1017,77 +1014,194 @@ summary(fitrl_all_misto)
 > Vemos aqui outro bom exemplo de como a dicotomização da variável estudada muda de acordo
 > com o objetivo do estudo em si.
 > No modelo com Pop como variável aleatória, foram considerados significativos o `GrupoB` e
-> `GenotipoAA`. Mas a interação `GrupoB:GenotipoAA` não foi mais significativa, o que pode
-> ser explicado pela redução do poder causada pela inclusão de um efeito aleatório, que é
-> uma consequência da mudança de foco do estudo, que agora é mais voltado para a generalização
-> dos resultados para além das populações estudadas, e não mais para a comparação entre elas.
+> `GenotipoAA`. Mas a interação `GrupoB:GenotipoAA` não foi mais significativa (p = 0,051),
+> o que se explica principalmente pela perda de poder estatístico decorrente da dicotomização
+> de Y. A inclusão do efeito aleatório contribui marginalmente para essa redução, mas não
+> é o fator principal — diferentemente do que ocorreria se houvesse grande variância
+> interpopulacional a ser acomodada.
+> Quanto à importância da Pop aleatória sobre Y dicotomizada, assim como no modelo contínuo,
+> a variância do efeito aleatório de População foi muito baixa (0,037), e o intervalo de
+> confiança para seu desvio-padrão inclui zero (IC 95%: [0,000 ; 0,740]), indicando que as
+> populações são homogêneas em relação ao desfecho binário após controle de Grupo e Genótipo.
 
 ---
 
 ## Comparação ANOVA vs. Regressão Logística
 
 ```{r q3_comparacao}
-# ANOVA Q1C1
-pval_anova_q1 <- anova(lm(Y ~ xa + xd, data=dat1))["xa","Pr(>F)"]
-pval_logit_q1 <- summary(fitrl1_ad)$coef["xa","Pr(>|z|)"]
-pval_anova_P2 <- anova(res_P2$fit_cat)["Genotipo","Pr(>F)"]
-pval_anova_P3 <- anova(res_P3$fit_cat)["Grupo:Genotipo","Pr(>F)"]
+library(knitr)
 
-# Logístico P2
-d2tmp <- dat_P2
-d2tmp$xa <- d2tmp$Geno_num - 1
-d2tmp$xd <- ifelse(d2tmp$Geno_num==1, 1, 0)
-d2tmp$Gb <- ifelse(d2tmp$Grupo=="A", 0, 1)
-d2tmp$Ybin2 <- as.factor(ifelse(d2tmp$Y > median(d2tmp$Y), 1, 0))
-pval_logit_P2 <- tryCatch(
-  summary(glm(Ybin2 ~ Gb*(xa+xd), family=binomial, data=d2tmp))$coef["xa","Pr(>|z|)"],
-  error = function(e) NA)
+# ── helpers ────────────────────────────────────────────────────────────────
+fmt <- function(x) ifelse(is.na(x), "—",
+                   ifelse(x < 0.001, "< 0.001",
+                          formatC(x, digits = 3, format = "f")))
 
-# Logístico P3
-d3tmp <- dat_P3
-d3tmp$xa <- d3tmp$Geno_num - 1
-d3tmp$xd <- ifelse(d3tmp$Geno_num==1, 1, 0)
-d3tmp$Gb <- ifelse(d3tmp$Grupo=="A", 0, 1)
-d3tmp$Ybin3 <- as.factor(ifelse(d3tmp$Y > median(d3tmp$Y), 1, 0))
-fit_logit_p3 <- tryCatch(
-  glm(Ybin3 ~ Gb*(xa+xd), family=binomial, data=d3tmp),
-  error = function(e) NULL)
-pval_logit_P3 <- if(!is.null(fit_logit_p3)) {
-  cf <- summary(fit_logit_p3)$coef
-  if ("Gb:xa" %in% rownames(cf)) cf["Gb:xa","Pr(>|z|)"] else NA
-} else NA
+get_pv_aov <- function(fit_aov, term) {
+  s <- summary(fit_aov)[[1]]
+  rownames(s) <- trimws(rownames(s))
+  if (term %in% rownames(s)) s[term, "Pr(>F)"] else NA
+}
 
+get_pv_glm <- function(fit_glm, term) {
+  cf <- summary(fit_glm)$coef
+  if (term %in% rownames(cf)) cf[term, "Pr(>|z|)"] else NA
+}
+
+get_pv_lm <- function(fit_lm, term) {
+  cf <- summary(fit_lm)$coef
+  if (term %in% rownames(cf)) cf[term, "Pr(>|t|)"] else NA
+}
+
+# ── Q1 Caso 1 ──────────────────────────────────────────────────────────────
+fit_lm_q1c1  <- lm(Y ~ xa + xd, data = dat1)
+anova_q1c1   <- anova(fit_lm_q1c1)
+
+pv_anova_q1_xa <- anova_q1c1["xa", "Pr(>F)"]
+pv_anova_q1_xd <- anova_q1c1["xd", "Pr(>F)"]
+pv_logit_q1_xa <- get_pv_glm(fitrl1_ad, "xa")
+pv_logit_q1_xd <- get_pv_glm(fitrl1_ad, "xd")
+
+# ── Q1 Caso 2 (modelos reduzidos) ──────────────────────────────────────────
+anova_q1c2  <- anova(fit2_reduzido)
+logit_q1c2  <- summary(fitrl2_reduzido)$coef
+
+get_a2 <- function(term) {
+  if (term %in% rownames(anova_q1c2)) anova_q1c2[term, "Pr(>F)"] else NA
+}
+get_l2 <- function(term) {
+  if (term %in% rownames(logit_q1c2)) logit_q1c2[term, "Pr(>|z|)"] else NA
+}
+
+# ── Q2 por população (corte = 90 mmHg) ─────────────────────────────────────
+make_logit_pop <- function(dat) {
+  dat$Ybin <- as.factor(ifelse(dat$Y > 90, 1, 0))
+  glm(Ybin ~ Grupo * Genotipo, family = binomial(link = "logit"), data = dat)
+}
+
+fit_logit_P1 <- make_logit_pop(dat_P1)
+fit_logit_P2 <- make_logit_pop(dat_P2)
+fit_logit_P3 <- make_logit_pop(dat_P3)
+
+# P1
+pv_aov_P1_grp  <- get_pv_aov(res_P1$fit_cat, "Grupo")
+pv_aov_P1_geno <- get_pv_aov(res_P1$fit_cat, "Genotipo")
+pv_aov_P1_int  <- get_pv_aov(res_P1$fit_cat, "Grupo:Genotipo")
+pv_glm_P1_grp  <- get_pv_glm(fit_logit_P1, "GrupoB")
+pv_glm_P1_geno <- get_pv_glm(fit_logit_P1, "GenotipoAA")
+pv_glm_P1_int  <- get_pv_glm(fit_logit_P1, "GrupoB:GenotipoAA")
+
+# P2
+pv_aov_P2_grp  <- get_pv_aov(res_P2$fit_cat, "Grupo")
+pv_aov_P2_geno <- get_pv_aov(res_P2$fit_cat, "Genotipo")
+pv_aov_P2_int  <- get_pv_aov(res_P2$fit_cat, "Grupo:Genotipo")
+pv_glm_P2_grp  <- get_pv_glm(fit_logit_P2, "GrupoB")
+pv_glm_P2_geno <- get_pv_glm(fit_logit_P2, "GenotipoAA")
+pv_glm_P2_int  <- get_pv_glm(fit_logit_P2, "GrupoB:GenotipoAA")
+
+# P3
+pv_aov_P3_grp  <- get_pv_aov(res_P3$fit_cat, "Grupo")
+pv_aov_P3_geno <- get_pv_aov(res_P3$fit_cat, "Genotipo")
+pv_aov_P3_int  <- get_pv_aov(res_P3$fit_cat, "Grupo:Genotipo")
+pv_glm_P3_grp  <- get_pv_glm(fit_logit_P3, "GrupoB")
+pv_glm_P3_geno <- get_pv_glm(fit_logit_P3, "GenotipoAA")
+pv_glm_P3_int  <- get_pv_glm(fit_logit_P3, "GrupoB:GenotipoAA")
+
+# ── Q2 Combinado – Pop FIXO ─────────────────────────────────────────────────
+pv_aov_fix_grp  <- get_pv_aov(fit_fixo, "Grupo")
+pv_aov_fix_geno <- get_pv_aov(fit_fixo, "Genotipo")
+pv_aov_fix_int  <- get_pv_aov(fit_fixo, "Grupo:Genotipo")
+pv_glm_fix_grp  <- get_pv_glm(fitrl_all_fixo, "GrupoB")
+pv_glm_fix_geno <- get_pv_glm(fitrl_all_fixo, "GenotipoAA")
+pv_glm_fix_int  <- get_pv_glm(fitrl_all_fixo, "GrupoB:GenotipoAA")
+
+# ── Q2 Combinado – Pop ALEATÓRIO ───────────────────────────────────────────
+lmer_cf  <- as.data.frame(summary(fit_misto)$coef)
+glmer_cf <- as.data.frame(summary(fitrl_all_misto)$coef)
+pcol_lmer  <- grep("Pr", colnames(lmer_cf),  value = TRUE)[1]
+pcol_glmer <- grep("Pr", colnames(glmer_cf), value = TRUE)[1]
+
+get_pv_mx <- function(cf, row, pcol) {
+  if (row %in% rownames(cf) && !is.na(pcol)) cf[row, pcol] else NA
+}
+
+pv_lmer_grp   <- get_pv_mx(lmer_cf,  "GrupoB",           pcol_lmer)
+pv_lmer_geno  <- get_pv_mx(lmer_cf,  "GenotipoAA",        pcol_lmer)
+pv_lmer_int   <- get_pv_mx(lmer_cf,  "GrupoB:GenotipoAA", pcol_lmer)
+pv_glmer_grp  <- get_pv_mx(glmer_cf, "GrupoB",            pcol_glmer)
+pv_glmer_geno <- get_pv_mx(glmer_cf, "GenotipoAA",         pcol_glmer)
+pv_glmer_int  <- get_pv_mx(glmer_cf, "GrupoB:GenotipoAA",  pcol_glmer)
+
+# ── Montar tabela ──────────────────────────────────────────────────────────
 comp <- data.frame(
-  Modelo  = c("ANOVA xa (Q1-C1)", "Logístico xa (Q1-C1)",
-              "ANOVA SNP (P2)", "Logístico xa (P2)",
-              "ANOVA SNP x Grupo (P3)", "Logístico xa x Grupo (P3)"),
-  P_valor = round(c(pval_anova_q1, pval_logit_q1,
-                    pval_anova_P2, pval_logit_P2,
-                    pval_anova_P3, pval_logit_P3), 4)
+  `Questão` = c(
+    rep("Q1 – Caso 1", 2),
+    rep("Q1 – Caso 2", 6),
+    rep("Q2 – P1", 3),
+    rep("Q2 – P2", 3),
+    rep("Q2 – P3", 3),
+    rep("Q2 – Combinado (Pop fixo)", 3),
+    rep("Q2 – Combinado (Pop aleatório)", 3)
+  ),
+  `Efeito` = c(
+    "xa (aditivo)", "xd (dominância)",
+    "xa1", "xd1", "xa2", "xd2",
+    "xa1:xa2 (epistasia a×a)", "xd1:xa2 (epistasia d×a)",
+    "Grupo", "Genótipo (AA)", "Grupo:Genótipo (AA)",
+    "Grupo", "Genótipo (AA)", "Grupo:Genótipo (AA)",
+    "Grupo", "Genótipo (AA)", "Grupo:Genótipo (AA)",
+    "Grupo", "Genótipo (AA)", "Grupo:Genótipo (AA)",
+    "GrupoB", "GenotipoAA", "GrupoB:GenotipoAA"
+  ),
+  `p ANOVA / lmer` = fmt(c(
+    pv_anova_q1_xa,   pv_anova_q1_xd,
+    get_a2("xa1"),    get_a2("xd1"),
+    get_a2("xa2"),    get_a2("xd2"),
+    get_a2("xa1:xa2"), get_a2("xd1:xa2"),
+    pv_aov_P1_grp, pv_aov_P1_geno, pv_aov_P1_int,
+    pv_aov_P2_grp, pv_aov_P2_geno, pv_aov_P2_int,
+    pv_aov_P3_grp, pv_aov_P3_geno, pv_aov_P3_int,
+    pv_aov_fix_grp, pv_aov_fix_geno, pv_aov_fix_int,
+    pv_lmer_grp,    pv_lmer_geno,    pv_lmer_int
+  )),
+  `p Logístico / glmer` = fmt(c(
+    pv_logit_q1_xa,   pv_logit_q1_xd,
+    get_l2("xa1"),    get_l2("xd1"),
+    get_l2("xa2"),    get_l2("xd2"),
+    get_l2("xa1:xa2"), get_l2("xd1:xa2"),
+    pv_glm_P1_grp, pv_glm_P1_geno, pv_glm_P1_int,
+    pv_glm_P2_grp, pv_glm_P2_geno, pv_glm_P2_int,
+    pv_glm_P3_grp, pv_glm_P3_geno, pv_glm_P3_int,
+    pv_glm_fix_grp, pv_glm_fix_geno, pv_glm_fix_int,
+    pv_glmer_grp,   pv_glmer_geno,   pv_glmer_int
+  )),
+  check.names = FALSE
 )
-knitr::kable(comp, caption="Comparação de p-valores: ANOVA vs. Regressão Logística")
+
+knitr::kable(comp,
+             caption = paste("Comparação de p-valores: ANOVA/lmer vs. Regressão Logística/glmer.",
+                             "Q1C1: corte Y=111; Q1C2: corte Y=105 (modelos reduzidos);",
+                             "Q2 por pop: corte Y=90 mmHg; Q2 combinado: corte=mediana global."),
+             align = c("l", "l", "r", "r"))
 ```
 
 > **Impacto da dicotomização:**
-> A tabela de p-valores ilustra de forma clara o impacto da dicotomização. Para
-> efeitos fortes — como o efeito aditivo em Q1-C1 e em P2 — ambos os modelos
-> detectam significância (p < 0,001), e a perda de poder é negligenciável. O caso
-> mais revelador é P3: a interação SNP$\times$subgrupo, altamente significativa na ANOVA
-> (p < 0,001), torna-se completamente indetectável na regressão logística
-> (p = 0,171) — perda de poder severa causada pela dicotomização de uma resposta
-> contínua com interação moderada.
->
-> O Caso 2 ilustra um problema adicional: com muitos preditores e Y dicotomizado,
-> a regressão logística pode sofrer separação completa, produzindo estimativas
-> numéricamente instáveis e ICs indefinidos — situação em que o modelo é
-> formalmente inapropriado.
->
-> Em síntese, quando Y é genuinamente contínua, a ANOVA é preferível: preserva
-> toda a informação, tem maior poder e evita os problemas de separação. A regressão
-> logística é o modelo correto apenas quando o fenótipo é binário por natureza
-> (ex.: hipertensão sim/não), situação em que os ORs oferecem interpretação
-> clínica direta — por exemplo, OR = 4,04 para `xa` em Q1-C1 significa que cada
-> alelo A adicional quadruplica a chance de PAD acima da mediana.
+> Sim, há impacto da categorização nos resultados de significância.
+> Ao longo da questão 3, percebemos que as mudanças observadas nos resultados de
+> significância entre os testes de ANOVA e regressão logística são principalmente
+> consequência da mudança da natureza do estudo, uma vez que não mais estudamos o
+> efeito das variáveis sobre o valor Y em si, mas sim a sua influência sobre a
+> alocação dos indivíduos em condições clínicas distintas.
+> As interpretações a cada caso diferem entre os modelos. Na ANOVA, os coeficientes
+> representam diferenças médias na resposta quantitativa, enquanto na regressão logística
+> representam mudanças no *log-odds* e *odds ratios* associados à probabilidade do fenótipo
+> dicotomizado. A categorização da variável resposta reduz a quantidade de informação
+> disponível, pois diferentes valores contínuos passam a pertencer à mesma categoria binária.
+> Em geral, isso pode reduzir o poder estatístico da análise. Contudo, mais que uma limitação, a
+> dicotomização é uma mudança de foco do estudo e uma ferramenta útil para responder a
+> perguntas clínicas específicas, como a identificação de fatores de risco para uma condição.
+> A escolha do ponto de corte é crucial e pode influenciar significativamente os resultados,
+> sendo importante ter consciência da relevância biológica da dicotomização adotada nesse
+> processo.
 
 ---
 
